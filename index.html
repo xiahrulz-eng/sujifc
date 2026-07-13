@@ -306,6 +306,10 @@
     border-radius:var(--r); background:var(--c-low); border:1px solid var(--outline-v); margin-bottom:7px;}
   .admin-row b{font-family:var(--f-head); font-weight:600; font-size:14px;}
   .admin-row .ar-btns{display:flex; gap:6px; flex-shrink:0;}
+  .login-opts{display:flex; gap:18px; margin-top:12px;}
+  .chk{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--on-var); cursor:pointer;}
+  .chk input{accent-color:var(--primary); width:15px; height:15px;}
+  #findPw:hover, #modeToggle:hover{text-decoration:underline;}
   /* 경기 결과 접기/펼치기 + 갤러리 */
   .match-item{background:var(--c-low); border:1px solid var(--outline-v); border-radius:var(--r-md); margin-bottom:8px; overflow:hidden;}
   .match-line{display:flex; align-items:center; gap:10px; padding:11px 13px; cursor:pointer; transition:.12s;}
@@ -544,12 +548,18 @@
   <input type="email" id="loginEmail" placeholder="name@example.com" autocomplete="username">
   <label class="fld">비밀번호</label>
   <input type="password" id="loginPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
+  <div id="loginExtras" class="login-opts">
+    <label class="chk"><input type="checkbox" id="saveId">아이디 저장</label>
+    <label class="chk"><input type="checkbox" id="savePw">비밀번호 저장</label>
+  </div>
   <div class="modal-btns">
     <button class="btn primary" id="loginSubmit" style="flex:1;" onclick="doLoginOrSignup()">로그인</button>
     <button class="btn ghost" style="flex:1;" onclick="closeLogin()">취소</button>
   </div>
-  <div style="text-align:center; margin-top:14px;">
-    <a id="modeToggle" onclick="toggleAuthMode()" style="cursor:pointer; color:var(--primary); font-size:13px; font-weight:600;">운영진으로 가입 신청하기 →</a>
+  <div style="text-align:center; margin-top:14px; font-size:13px;">
+    <a id="findPw" onclick="resetPw()" style="cursor:pointer; color:var(--on-var);">비밀번호 찾기</a>
+    <span id="linkSep" style="color:var(--outline);"> · </span>
+    <a id="modeToggle" onclick="toggleAuthMode()" style="cursor:pointer; color:var(--primary); font-weight:600;">운영진으로 가입 신청하기 →</a>
   </div>
 </div></div>
 
@@ -693,6 +703,7 @@ function initFirebase(){
     firebase.initializeApp(window.SUJI_FIREBASE_CONFIG);
     FB=firebase.firestore(); FBauth=firebase.auth();
     try{ FBstorage=firebase.storage(); }catch(e){ FBstorage=null; }
+    FBauth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{}); // 자동 로그인(세션 유지)
     FB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
     FBauth.onAuthStateChanged(u=>{ currentUser=u;
       if(u){ FB.collection('admins').doc(u.uid).get().then(doc=>{ isAdmin=doc.exists; updateAdminUI(); if(isAdmin) maybeSeed(); }).catch(()=>{ isAdmin=false; updateAdminUI(); }); }
@@ -742,18 +753,36 @@ function updateAdminUI(){
   if(document.getElementById('view-match').classList.contains('on')) renderMatches();
 }
 function authClick(){ if(!FB) return; if(currentUser){ FBauth.signOut(); toast('로그아웃되었습니다'); } else openLogin(); }
+function loadLoginPrefs(){
+  const sid=localStorage.getItem('suziFC_saveId')==='1', spw=localStorage.getItem('suziFC_savePw')==='1';
+  document.getElementById('saveId').checked=sid; document.getElementById('savePw').checked=spw;
+  document.getElementById('loginEmail').value = sid?(localStorage.getItem('suziFC_savedEmail')||''):'';
+  document.getElementById('loginPw').value = spw?(localStorage.getItem('suziFC_savedPw')||''):'';
+}
+function saveLoginPrefs(em,pw){
+  const sid=document.getElementById('saveId').checked, spw=document.getElementById('savePw').checked;
+  localStorage.setItem('suziFC_saveId', sid?'1':'0'); localStorage.setItem('suziFC_savePw', spw?'1':'0');
+  if(sid) localStorage.setItem('suziFC_savedEmail',em); else localStorage.removeItem('suziFC_savedEmail');
+  if(spw) localStorage.setItem('suziFC_savedPw',pw); else localStorage.removeItem('suziFC_savedPw');
+}
 function openLogin(){ authMode='login'; renderAuthMode();
-  document.getElementById('signupName').value=''; document.getElementById('loginEmail').value=''; document.getElementById('loginPw').value='';
+  document.getElementById('signupName').value=''; loadLoginPrefs();
   document.getElementById('loginOverlay').classList.add('on'); }
 function closeLogin(){ document.getElementById('loginOverlay').classList.remove('on'); }
 function renderAuthMode(){
   const s=authMode==='signup';
   document.getElementById('loginTitle').textContent=s?'📝 운영진 가입 신청':'🔒 운영진 로그인';
-  document.getElementById('loginHint').textContent=s?'가입 후 관리자 승인을 받으면 편집할 수 있습니다.':'명단·기록을 수정하려면 로그인하세요.';
+  document.getElementById('loginHint').textContent=s?'가입 후 관리자 승인을 받으면 편집할 수 있습니다.':'한 번 로그인하면 로그아웃 전까지 자동 로그인됩니다.';
   document.getElementById('signupNameWrap').style.display=s?'':'none';
+  document.getElementById('loginExtras').style.display=s?'none':'flex';
+  document.getElementById('findPw').style.display=s?'none':'';
+  document.getElementById('linkSep').style.display=s?'none':'';
   document.getElementById('loginSubmit').textContent=s?'가입 신청':'로그인';
   document.getElementById('modeToggle').textContent=s?'← 로그인으로 돌아가기':'운영진으로 가입 신청하기 →';
 }
+function resetPw(){ const em=document.getElementById('loginEmail').value.trim();
+  if(!em){ toast('가입한 이메일을 입력한 뒤 눌러주세요'); return; }
+  FBauth.sendPasswordResetEmail(em).then(()=>toast('비밀번호 재설정 메일을 보냈습니다 📧 (메일함 확인)')).catch(e=>{ console.error(e); toast('메일 전송 실패: '+authErr(e)); }); }
 function toggleAuthMode(){ authMode=authMode==='signup'?'login':'signup'; renderAuthMode(); }
 function authErr(e){ const c=e&&e.code||''; if(c==='auth/email-already-in-use')return '이미 가입된 이메일입니다'; if(c==='auth/invalid-email')return '이메일 형식이 올바르지 않습니다'; if(c==='auth/weak-password')return '비밀번호는 6자 이상이어야 합니다'; if(c==='auth/wrong-password'||c==='auth/invalid-credential')return '이메일 또는 비밀번호가 올바르지 않습니다'; if(c==='auth/user-not-found')return '가입되지 않은 이메일입니다'; return '다시 시도해주세요'; }
 function doLoginOrSignup(){
@@ -768,7 +797,7 @@ function doLoginOrSignup(){
       .then(()=>{ closeLogin(); toast('운영진 가입 신청 완료! 관리자 승인을 기다려주세요 📝'); })
       .catch(e=>{ console.error(e); toast('가입 실패: '+authErr(e)); });
   } else {
-    FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ closeLogin(); toast('로그인 성공 ✅'); }).catch(e=>{ console.error(e); toast('로그인 실패: '+authErr(e)); });
+    FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ saveLoginPrefs(em,pw); closeLogin(); toast('로그인 성공 ✅'); }).catch(e=>{ console.error(e); toast('로그인 실패: '+authErr(e)); });
   }
 }
 /* 운영진 관리 (승인/거절/제거) */
