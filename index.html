@@ -299,6 +299,21 @@
   body.admin #authInfo{color:var(--tertiary); font-family:var(--f-label); font-size:11px; letter-spacing:.05em;}
   .ro-note{font-family:var(--f-label); font-size:11px; letter-spacing:.04em; color:var(--on-var);
     background:var(--c-low); border:1px solid var(--outline-v); border-radius:var(--r); padding:8px 12px; margin-bottom:12px;}
+  .admin-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px;
+    border-radius:var(--r); background:var(--c-low); border:1px solid var(--outline-v); margin-bottom:7px;}
+  .admin-row b{font-family:var(--f-head); font-weight:600; font-size:14px;}
+  .admin-row .ar-btns{display:flex; gap:6px; flex-shrink:0;}
+  /* 사진 크롭 편집기 */
+  #cropOverlay{z-index:70;}
+  .crop-stage{width:280px; max-width:100%; margin:0 auto; border-radius:var(--r-md); overflow:hidden; touch-action:none; cursor:grab;
+    background:repeating-conic-gradient(#2c2f34 0% 25%, #22252a 0% 50%) 50%/22px 22px; border:1px solid var(--outline-v);}
+  .crop-stage:active{cursor:grabbing;}
+  #cropCanvas{display:block; width:100%; height:auto;}
+  .crop-ctrl{display:flex; align-items:center; gap:10px; margin-top:14px;}
+  .crop-ctrl input[type=range]{flex:1; accent-color:var(--primary);}
+  .crop-ctrl button{width:40px; height:40px; flex-shrink:0; border-radius:var(--r); background:var(--c-high);
+    border:1px solid var(--outline-v); color:var(--on); font-size:19px; font-weight:700; cursor:pointer;}
+  .crop-ctrl button:hover{background:var(--c-highest);}
   /* edit modal: position quick buttons + exclude */
   .pos-btns{display:flex; gap:6px; margin:4px 0 14px;}
   .pos-btns button{flex:1; font-family:var(--f-label); font-size:12px; font-weight:700; padding:9px 0; border-radius:var(--r);
@@ -341,7 +356,7 @@
 </head>
 <body>
 <header>
-  <div class="logo"><span class="mk">⚽</span>수지<span style="color:var(--primary)">FC</span></div>
+  <div class="logo"><span class="mk"><img src="logo-mark.png" alt="수지FC" style="width:23px;height:23px;object-fit:contain;"></span>수지<span style="color:var(--primary)">FC</span></div>
   <div class="tabs">
     <button id="tab-lineup" class="active" onclick="showView('lineup')">라인업 생성</button>
     <button id="tab-roster" onclick="showView('roster')">선수 명단</button>
@@ -349,6 +364,7 @@
     <button id="tab-stats" onclick="showView('stats')">개인 기록</button>
   </div>
   <span class="spacer" id="authInfo"></span>
+  <button id="adminManageBtn" class="btn sm" style="display:none;" onclick="openAdminManage()">운영진 관리</button>
   <button id="authBtn" class="btn sm" style="display:none;" onclick="authClick()">운영진 로그인</button>
 </header>
 
@@ -374,9 +390,9 @@
             <div><div class="t">1. 완전 무작위</div><div class="d">전체 임의 랜덤으로 팀 편성</div></div></label>
           <label class="opt"><input type="radio" name="mtd" value="position">
             <div><div class="t">2. 포지션 고려</div><div class="d">수비·미드·공격 균형 배치</div></div></label>
-          <label class="opt"><input type="radio" name="mtd" value="skill">
+          <label class="opt admin-only"><input type="radio" name="mtd" value="skill">
             <div><div class="t">3. 실력 고려</div><div class="d">상·중·하 양팀 골고루</div></div></label>
-          <label class="opt"><input type="radio" name="mtd" value="both">
+          <label class="opt admin-only"><input type="radio" name="mtd" value="both">
             <div><div class="t">4. 포지션 + 실력</div><div class="d">포지션 균형 + 실력 최대한 유사</div></div></label>
         </div>
       </div>
@@ -386,7 +402,7 @@
         <div class="rowg">
           <div><label class="fld">포지션</label>
             <select id="gPos"><option>GK</option><option>DF</option><option selected>MF</option><option>FW</option></select></div>
-          <div><label class="fld">실력</label>
+          <div class="admin-only"><label class="fld">실력</label>
             <select id="gSkill"><option>상</option><option selected>중</option><option>하</option></select></div>
           <div style="max-width:78px"><label class="fld">인원</label>
             <input type="number" id="gCount" min="1" max="20" value="1"></div>
@@ -435,7 +451,7 @@
       <div class="filters">
         <div class="fgroup"><span class="lab">포지션</span>
           <div class="chips" id="posChips"></div></div>
-        <div class="fgroup"><span class="lab">실력</span>
+        <div class="fgroup admin-only"><span class="lab">실력</span>
           <div class="chips" id="skillChips"></div></div>
         <div class="fgroup"><span class="lab">참석</span>
           <div class="chips" id="attendChips"></div></div>
@@ -482,19 +498,29 @@
 <!-- history modal -->
 <div class="overlay" id="histOverlay"><div class="modal wide" id="histBody"></div></div>
 
-<!-- login modal -->
+<!-- login / signup modal -->
 <div class="overlay" id="loginOverlay"><div class="modal">
-  <h3>🔒 운영진 로그인</h3>
-  <p class="muted" style="font-size:12px; text-align:center; margin:0 0 16px;">명단·사진·기록을 수정하려면 로그인하세요.<br>선수는 로그인 없이 열람만 하면 됩니다.</p>
+  <h3 id="loginTitle">🔒 운영진 로그인</h3>
+  <p class="muted" id="loginHint" style="font-size:12px; text-align:center; margin:0 0 16px;">명단·사진·기록을 수정하려면 로그인하세요.</p>
+  <div id="signupNameWrap" style="display:none;">
+    <label class="fld">이름</label>
+    <input type="text" id="signupName" placeholder="이름" maxlength="10">
+  </div>
   <label class="fld">이메일</label>
-  <input type="email" id="loginEmail" placeholder="admin@example.com" autocomplete="username">
+  <input type="email" id="loginEmail" placeholder="name@example.com" autocomplete="username">
   <label class="fld">비밀번호</label>
-  <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+  <input type="password" id="loginPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
   <div class="modal-btns">
-    <button class="btn primary" style="flex:1;" onclick="doLogin()">로그인</button>
+    <button class="btn primary" id="loginSubmit" style="flex:1;" onclick="doLoginOrSignup()">로그인</button>
     <button class="btn ghost" style="flex:1;" onclick="closeLogin()">취소</button>
   </div>
+  <div style="text-align:center; margin-top:14px;">
+    <a id="modeToggle" onclick="toggleAuthMode()" style="cursor:pointer; color:var(--primary); font-size:13px; font-weight:600;">운영진으로 가입 신청하기 →</a>
+  </div>
 </div></div>
+
+<!-- admin management modal -->
+<div class="overlay" id="adminOverlay"><div class="modal wide" id="adminBody"></div></div>
 
 <!-- modal -->
 <div class="overlay" id="overlay">
@@ -525,11 +551,28 @@
 <!-- lineup edit modal -->
 <div class="overlay" id="editOverlay"><div class="modal wide" id="editBody"></div></div>
 
+<!-- photo crop modal -->
+<div class="overlay" id="cropOverlay"><div class="modal">
+  <h3>🖼️ 사진 위치·크기 조정</h3>
+  <p class="muted" style="font-size:12px; text-align:center; margin:0 0 14px;">드래그로 이동 · 슬라이더/휠/손가락으로 확대·축소</p>
+  <div class="crop-stage"><canvas id="cropCanvas" width="280" height="280"></canvas></div>
+  <div class="crop-ctrl">
+    <button type="button" onclick="cropZoom(-0.15)">－</button>
+    <input type="range" id="cropRange" min="0.3" max="5" step="0.01" value="1" oninput="cropSetZoom(this.value)">
+    <button type="button" onclick="cropZoom(0.15)">＋</button>
+  </div>
+  <div class="modal-btns">
+    <button class="btn primary" style="flex:1;" onclick="applyCrop()">적용</button>
+    <button class="btn ghost" style="flex:1;" onclick="closeCrop()">취소</button>
+  </div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 /* ============ 상수 ============ */
 const POS_COLORS={GK:'#f1c40f',DF:'#5b9bff',MF:'#3ddc84',FW:'#ff5a52'};
+const DEFAULT_PROFILE_SRC='profile-none.png';
 const POS_LIST=['GK','DF','MF','FW'];
 const SKILL_LIST=['상','중','하'];
 const SKILL_SCORE={'상':3,'중':2,'하':1};
@@ -565,7 +608,7 @@ let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
 
 /* ============ Firebase 연동 (실시간 동기화 · 운영진 편집) ============ */
-let FB=null, FBauth=null, isAdmin=false, attendMap={};
+let FB=null, FBauth=null, isAdmin=false, currentUser=null, attendMap={}, authMode='login';
 function canEdit(){ return !FB || isAdmin; }
 function requireAdmin(){ if(canEdit()) return true; toast('운영진 로그인이 필요합니다 🔒'); return false; }
 function loadAttend(){ const r=localStorage.getItem('suziFC_attend'); if(r){try{attendMap=JSON.parse(r);}catch(e){attendMap={};}} }
@@ -579,7 +622,9 @@ function initFirebase(){
     firebase.initializeApp(window.SUJI_FIREBASE_CONFIG);
     FB=firebase.firestore(); FBauth=firebase.auth();
     FB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
-    FBauth.onAuthStateChanged(u=>{ isAdmin=!!u; updateAdminUI(); if(u) maybeSeed(); });
+    FBauth.onAuthStateChanged(u=>{ currentUser=u;
+      if(u){ FB.collection('admins').doc(u.uid).get().then(doc=>{ isAdmin=doc.exists; updateAdminUI(); if(isAdmin) maybeSeed(); }).catch(()=>{ isAdmin=false; updateAdminUI(); }); }
+      else { isAdmin=false; updateAdminUI(); } });
     subscribeRoster(); subscribeMatches();
     return true;
   }catch(e){ console.error('Firebase init 실패',e); FB=null; return false; }
@@ -611,29 +656,124 @@ function fbReplaceRoster(list){ if(!FB||!isAdmin) return; FB.collection('roster'
 function fbSaveMatch(mt){ if(!FB||!isAdmin||!mt) return; FB.collection('matches').doc(mt.id).set(matchDoc(mt)).catch(e=>console.error(e)); }
 function fbDeleteMatch(id){ if(!FB||!isAdmin) return; FB.collection('matches').doc(id).delete().catch(e=>console.error(e)); }
 function updateAdminUI(){
-  const admin=canEdit();
-  document.body.classList.toggle('admin',admin);
-  const btn=document.getElementById('authBtn'), info=document.getElementById('authInfo');
-  if(FB){ btn.style.display=''; btn.textContent=isAdmin?'로그아웃':'운영진 로그인'; info.textContent=isAdmin?'● 운영진 모드':''; }
-  else { btn.style.display='none'; info.textContent=''; }
+  document.body.classList.toggle('admin',canEdit());
+  const btn=document.getElementById('authBtn'), info=document.getElementById('authInfo'), mng=document.getElementById('adminManageBtn');
+  if(FB){
+    btn.style.display='';
+    if(!currentUser){ btn.textContent='운영진 로그인'; info.textContent=''; }
+    else if(isAdmin){ btn.textContent='로그아웃'; info.textContent='● 운영진 모드'; }
+    else { btn.textContent='로그아웃'; info.textContent='승인 대기 중'; }
+    mng.style.display=isAdmin?'':'none';
+  } else { btn.style.display='none'; info.textContent=''; mng.style.display='none'; }
   renderRoster();
   if(document.getElementById('view-stats').classList.contains('on')) renderStats();
   if(document.getElementById('view-match').classList.contains('on')) renderMatches();
 }
-function authClick(){ if(!FB) return; if(isAdmin){ FBauth.signOut(); toast('로그아웃되었습니다'); } else openLogin(); }
-function openLogin(){ document.getElementById('loginEmail').value=''; document.getElementById('loginPw').value=''; document.getElementById('loginOverlay').classList.add('on'); }
+function authClick(){ if(!FB) return; if(currentUser){ FBauth.signOut(); toast('로그아웃되었습니다'); } else openLogin(); }
+function openLogin(){ authMode='login'; renderAuthMode();
+  document.getElementById('signupName').value=''; document.getElementById('loginEmail').value=''; document.getElementById('loginPw').value='';
+  document.getElementById('loginOverlay').classList.add('on'); }
 function closeLogin(){ document.getElementById('loginOverlay').classList.remove('on'); }
-function doLogin(){ const em=document.getElementById('loginEmail').value.trim(), pw=document.getElementById('loginPw').value;
+function renderAuthMode(){
+  const s=authMode==='signup';
+  document.getElementById('loginTitle').textContent=s?'📝 운영진 가입 신청':'🔒 운영진 로그인';
+  document.getElementById('loginHint').textContent=s?'가입 후 관리자 승인을 받으면 편집할 수 있습니다.':'명단·기록을 수정하려면 로그인하세요.';
+  document.getElementById('signupNameWrap').style.display=s?'':'none';
+  document.getElementById('loginSubmit').textContent=s?'가입 신청':'로그인';
+  document.getElementById('modeToggle').textContent=s?'← 로그인으로 돌아가기':'운영진으로 가입 신청하기 →';
+}
+function toggleAuthMode(){ authMode=authMode==='signup'?'login':'signup'; renderAuthMode(); }
+function authErr(e){ const c=e&&e.code||''; if(c==='auth/email-already-in-use')return '이미 가입된 이메일입니다'; if(c==='auth/invalid-email')return '이메일 형식이 올바르지 않습니다'; if(c==='auth/weak-password')return '비밀번호는 6자 이상이어야 합니다'; if(c==='auth/wrong-password'||c==='auth/invalid-credential')return '이메일 또는 비밀번호가 올바르지 않습니다'; if(c==='auth/user-not-found')return '가입되지 않은 이메일입니다'; return '다시 시도해주세요'; }
+function doLoginOrSignup(){
+  const em=document.getElementById('loginEmail').value.trim(), pw=document.getElementById('loginPw').value;
   if(!em||!pw){ toast('이메일과 비밀번호를 입력하세요'); return; }
-  FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ closeLogin(); toast('운영진 로그인 성공 ✅'); }).catch(e=>{ console.error(e); toast('로그인 실패 — 이메일/비밀번호를 확인하세요'); }); }
+  if(authMode==='signup'){
+    const name=document.getElementById('signupName').value.trim();
+    if(!name){ toast('이름을 입력하세요'); return; }
+    if(pw.length<6){ toast('비밀번호는 6자 이상이어야 합니다'); return; }
+    FBauth.createUserWithEmailAndPassword(em,pw)
+      .then(cred=>FB.collection('adminRequests').doc(cred.user.uid).set({name,email:em,at:Date.now()}))
+      .then(()=>{ closeLogin(); toast('운영진 가입 신청 완료! 관리자 승인을 기다려주세요 📝'); })
+      .catch(e=>{ console.error(e); toast('가입 실패: '+authErr(e)); });
+  } else {
+    FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ closeLogin(); toast('로그인 성공 ✅'); }).catch(e=>{ console.error(e); toast('로그인 실패: '+authErr(e)); });
+  }
+}
+/* 운영진 관리 (승인/거절/제거) */
+function openAdminManage(){
+  if(!FB||!isAdmin){ toast('운영진만 사용할 수 있습니다'); return; }
+  const body=document.getElementById('adminBody');
+  body.innerHTML='<h3>👥 운영진 관리</h3><p class="muted" style="font-size:12px;text-align:center;padding:16px 0;">불러오는 중...</p>';
+  document.getElementById('adminOverlay').classList.add('on');
+  Promise.all([FB.collection('adminRequests').get(), FB.collection('admins').get()]).then(([reqs,admins])=>{
+    let html='<h3>👥 운영진 관리</h3>';
+    html+='<div class="modal-sub">🕓 승인 대기</div>';
+    if(reqs.empty) html+='<p class="muted" style="font-size:12px;margin:0 0 8px;">대기 중인 신청이 없습니다.</p>';
+    else reqs.forEach(d=>{ const r=d.data(), nm=(r.name||'').replace(/'/g,"\\'"), em=(r.email||'').replace(/'/g,"\\'");
+      html+=`<div class="admin-row"><div style="min-width:0"><b>${r.name||'(이름없음)'}</b><div class="muted" style="font-size:11px">${r.email||''}</div></div>
+        <div class="ar-btns"><button class="btn primary sm" onclick="approveReq('${d.id}','${nm}','${em}')">승인</button>
+        <button class="btn ghost sm" onclick="rejectReq('${d.id}')">거절</button></div></div>`; });
+    html+='<div class="modal-sub" style="margin-top:16px">✅ 현재 운영진</div>';
+    admins.forEach(d=>{ const a=d.data(), me=(currentUser&&d.id===currentUser.uid);
+      html+=`<div class="admin-row"><div style="min-width:0"><b>${a.name||a.email||'운영진'}</b>${me?' <span style="color:var(--tertiary);font-size:11px">(나)</span>':''}<div class="muted" style="font-size:11px">${a.email||''}</div></div>
+        ${me?'':`<div class="ar-btns"><button class="btn ghost sm" onclick="removeAdmin('${d.id}')">제거</button></div>`}</div>`; });
+    html+='<div class="modal-btns"><button class="btn ghost" style="flex:1" onclick="closeAdminManage()">닫기</button></div>';
+    body.innerHTML=html;
+  }).catch(e=>{ console.error(e); body.innerHTML='<h3>👥 운영진 관리</h3><p class="muted" style="text-align:center;padding:16px 0;">불러오기 실패</p><div class="modal-btns"><button class="btn ghost" style="flex:1" onclick="closeAdminManage()">닫기</button></div>'; });
+}
+function closeAdminManage(){ document.getElementById('adminOverlay').classList.remove('on'); }
+function approveReq(uid,name,email){ FB.collection('admins').doc(uid).set({name,email,at:Date.now()})
+  .then(()=>FB.collection('adminRequests').doc(uid).delete()).then(()=>{ toast('승인 완료 ✅'); openAdminManage(); }).catch(e=>{ console.error(e); toast('승인 실패'); }); }
+function rejectReq(uid){ FB.collection('adminRequests').doc(uid).delete().then(()=>{ toast('신청을 거절했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
+function removeAdmin(uid){ if(!confirm('이 운영진 권한을 제거할까요?'))return; FB.collection('admins').doc(uid).delete().then(()=>{ toast('운영진에서 제거했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
 function compressImage(src,cb){
   const img=new Image();
-  img.onload=()=>{ const max=256; let w=img.width,h=img.height;
+  img.onload=()=>{ const max=340; let w=img.width,h=img.height;
     if(w>h){ if(w>max){h=Math.round(h*max/w); w=max;} } else { if(h>max){w=Math.round(w*max/h); h=max;} }
-    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
-    try{ cb(c.toDataURL('image/jpeg',0.72)); }catch(e){ cb(src); } };
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const ctx=c.getContext('2d'); ctx.clearRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+    // 투명 배경(컷아웃 PNG)이면 PNG로 저장해 투명 유지, 아니면 JPEG로 용량 절감
+    let hasAlpha=false;
+    try{ const dt=ctx.getImageData(0,0,w,h).data; for(let i=3;i<dt.length;i+=4){ if(dt[i]<250){ hasAlpha=true; break; } } }catch(e){ hasAlpha=true; }
+    try{ cb(hasAlpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg',0.78)); }catch(e){ cb(src); } };
   img.onerror=()=>cb(src); img.src=src;
 }
+/* ============ 사진 크롭 편집기 ============ */
+const CROP_C=280;
+let cropImg=null, cropZoomV=1, cropBaseScale=1, cropX=0, cropY=0;
+const cropPtrs=new Map(); let cropPanStart=null, cropPinch=null;
+function clampv(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function canvasToDataURL(c){ const ctx=c.getContext('2d'); let hasAlpha=false;
+  try{ const d=ctx.getImageData(0,0,c.width,c.height).data; for(let i=3;i<d.length;i+=4){ if(d[i]<250){hasAlpha=true;break;} } }catch(e){ hasAlpha=true; }
+  return hasAlpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg',0.82); }
+function openCrop(src){
+  cropImg=new Image();
+  cropImg.onload=()=>{ cropBaseScale=Math.min(CROP_C/cropImg.width, CROP_C/cropImg.height); cropZoomV=1; cropX=0; cropY=0;
+    document.getElementById('cropRange').value=1; drawCrop(); document.getElementById('cropOverlay').classList.add('on'); };
+  cropImg.onerror=()=>{ compressImage(src,d=>{tempPhoto=d;setAva(tempPhoto,'');}); };
+  cropImg.src=src;
+}
+function closeCrop(){ document.getElementById('cropOverlay').classList.remove('on'); cropPtrs.clear(); cropPanStart=null; cropPinch=null; }
+function drawCrop(){ if(!cropImg)return; const c=document.getElementById('cropCanvas'), ctx=c.getContext('2d');
+  ctx.clearRect(0,0,CROP_C,CROP_C); const s=cropBaseScale*cropZoomV, w=cropImg.width*s, h=cropImg.height*s;
+  ctx.drawImage(cropImg, CROP_C/2 - w/2 + cropX, CROP_C/2 - h/2 + cropY, w, h); }
+function cropZoom(d){ cropZoomV=clampv(cropZoomV+d,0.3,5); document.getElementById('cropRange').value=cropZoomV.toFixed(2); drawCrop(); }
+function cropSetZoom(v){ cropZoomV=clampv(+v,0.3,5); drawCrop(); }
+function cropFactor(){ const c=document.getElementById('cropCanvas'); return CROP_C / (c.clientWidth||CROP_C); }
+function cropDown(e){ const c=e.currentTarget; try{c.setPointerCapture(e.pointerId);}catch(_){} cropPtrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); e.preventDefault();
+  if(cropPtrs.size===1){ cropPanStart={x:e.clientX,y:e.clientY,ox:cropX,oy:cropY}; cropPinch=null; }
+  else if(cropPtrs.size===2){ const p=[...cropPtrs.values()]; cropPinch={d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y),z:cropZoomV}; cropPanStart=null; } }
+function cropMove(e){ if(!cropPtrs.has(e.pointerId))return; cropPtrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(cropPinch && cropPtrs.size>=2){ const p=[...cropPtrs.values()], d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    cropZoomV=clampv(cropPinch.z*(d/cropPinch.d),0.3,5); document.getElementById('cropRange').value=cropZoomV.toFixed(2); drawCrop(); }
+  else if(cropPanStart){ const f=cropFactor(); cropX=cropPanStart.ox+(e.clientX-cropPanStart.x)*f; cropY=cropPanStart.oy+(e.clientY-cropPanStart.y)*f; drawCrop(); } }
+function cropUp(e){ cropPtrs.delete(e.pointerId); if(cropPtrs.size<2)cropPinch=null;
+  if(cropPtrs.size===0)cropPanStart=null; else if(cropPtrs.size===1){ const p=[...cropPtrs.values()][0]; cropPanStart={x:p.x,y:p.y,ox:cropX,oy:cropY}; } }
+function applyCrop(){ if(!cropImg){ closeCrop(); return; } const OUT=340, k=OUT/CROP_C;
+  const oc=document.createElement('canvas'); oc.width=OUT; oc.height=OUT; const octx=oc.getContext('2d');
+  const s=cropBaseScale*cropZoomV, w=cropImg.width*s*k, h=cropImg.height*s*k;
+  octx.drawImage(cropImg, OUT/2 - w/2 + cropX*k, OUT/2 - h/2 + cropY*k, w, h);
+  tempPhoto=canvasToDataURL(oc); setAva(tempPhoto,''); closeCrop(); }
 
 /* ============ 저장/생성 ============ */
 function save(){ localStorage.setItem('suziFC_members',JSON.stringify(members)); }
@@ -730,7 +870,7 @@ function renderRoster(){
       <span class="ava sm" ${ava}>${m.photo?'':m.name[0]}</span>
       <span class="mr-name">${m.name}</span>
       <span class="badge pos" style="background:${POS_COLORS[m.position]}">${m.position}</span>
-      <span class="badge skill">${m.skill}</span>
+      <span class="badge skill admin-only">${m.skill}</span>
       ${m.age?`<span class="mr-age">${m.age}세</span>`:''}
       <span class="mr-sp"></span>
       <button class="mr-toggle ${m.attend?'on':''}" onclick="toggleAttend('${m.id}')">${m.attend?'참석':'불참'}</button>
@@ -771,7 +911,7 @@ function setAva(photo,fb){ const a=document.getElementById('avaEdit');
 function clearPhoto(){ tempPhoto=null; const nm=document.getElementById('mName').value.trim(); setAva(null,nm?nm[0]:'사진 선택'); toast('사진을 삭제했습니다'); }
 function closeModal(){ document.getElementById('overlay').classList.remove('on'); }
 document.getElementById('photoInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader(); r.onload=ev=>{ compressImage(ev.target.result,d=>{ tempPhoto=d; setAva(tempPhoto,''); }); }; r.readAsDataURL(f); });
+  const r=new FileReader(); r.onload=ev=>openCrop(ev.target.result); r.readAsDataURL(f); e.target.value=''; });
 function saveMember(){
   if(!requireAdmin())return;
   const name=document.getElementById('mName').value.trim(); if(!name){toast('이름을 입력하세요');return;}
@@ -958,18 +1098,14 @@ function drawPosBadge(ctx,x,y,text,color){
   ctx.fillStyle='#0c0e11'; ctx.fillText(text,x,y+1);
 }
 function drawCard(ctx,x,y,p,accent){
-  const r=34; const img=(p&&p.photo)?getImg(p.photo):null;
-  ctx.save(); ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.closePath();
-  if(img){ ctx.clip(); const s=Math.max(2*r/img.naturalWidth,2*r/img.naturalHeight),w=img.naturalWidth*s,h=img.naturalHeight*s;
+  const box=84, half=box/2;
+  const img=(p&&p.photo)?getImg(p.photo):getImg(DEFAULT_PROFILE_SRC);
+  if(img){ const s=Math.min(box/img.naturalWidth,box/img.naturalHeight),w=img.naturalWidth*s,h=img.naturalHeight*s;
     ctx.drawImage(img,x-w/2,y-h/2,w,h); }
-  else{ ctx.fillStyle=p?POS_COLORS[p.position]:'#3a3d42';ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='bold 26px "Space Grotesk",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(p?(p.name?p.name[0]:'?'):'+',x,y+1); }
-  ctx.restore();
-  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.lineWidth=3;ctx.strokeStyle=accent;ctx.stroke();
-  ctx.lineWidth=1;ctx.strokeStyle='rgba(255,255,255,.6)';ctx.beginPath();ctx.arc(x,y,r-2,0,Math.PI*2);ctx.stroke();
+  else if(p){ ctx.fillStyle='#fff';ctx.font='bold 24px "Space Grotesk",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(p.name?p.name[0]:'?',x,y); }
   if(!p)return;
-  const bw=104,bh=30,bx=x-bw/2,by=y+r+6;
+  const bw=104,bh=30,bx=x-bw/2,by=y+half+4;
   roundRect(ctx,bx,by,bw,bh,7); ctx.fillStyle='rgba(8,12,16,.86)';ctx.fill();
   roundRect(ctx,bx,by,bw,4,2); ctx.fillStyle=accent;ctx.fill();
   ctx.textAlign='center';
@@ -989,10 +1125,10 @@ function drawTeam(canvas,team,key){
   order.forEach((pos,ri)=>{ const y=top+gap*ri+gap/2,arr=team.rows[pos];
     arr.forEach((p,ci)=>{ const x=CW*(ci+1)/(arr.length+1);
       drawCard(ctx,x,y,p,team.color);
-      drawPosBadge(ctx,x,y-46,slotLabel(pos,arr.length,ci),POS_COLORS[pos]);
-      if(key) hitMap[key].push({x,y,r:42,ref:{team:key,type:'starter',pos,idx:ci}});
+      drawPosBadge(ctx,x,y-54,slotLabel(pos,arr.length,ci),POS_COLORS[pos]);
+      if(key) hitMap[key].push({x,y,r:48,ref:{team:key,type:'starter',pos,idx:ci}});
       if(key&&hoverRef&&hoverRef.team===key&&hoverRef.type==='starter'&&hoverRef.pos===pos&&hoverRef.idx===ci){
-        ctx.beginPath();ctx.arc(x,y,44,0,Math.PI*2);ctx.lineWidth=4;ctx.strokeStyle='#fff';
+        ctx.beginPath();ctx.arc(x,y,50,0,Math.PI*2);ctx.lineWidth=4;ctx.strokeStyle='#fff';
         ctx.setLineDash([7,5]);ctx.stroke();ctx.setLineDash([]);
       }
     }); });
@@ -1046,7 +1182,7 @@ function renderResult(){
   const hint=document.createElement('div'); hint.className='edit-hint';
   hint.innerHTML='💡 선수를 <b>드래그</b>해 다른 선수 위에 놓으면 자리가 바뀝니다. <b>클릭</b>하면 목록에서 교체할 수도 있어요 (후보·다른 팀 포함).';
   box.appendChild(hint);
-  const srcs=[]; ['orange','green'].forEach(k=>{ const t=lastTeams[k];
+  const srcs=[DEFAULT_PROFILE_SRC]; ['orange','green'].forEach(k=>{ const t=lastTeams[k];
     POS_LIST.forEach(pos=>t.rows[pos].forEach(p=>{if(p&&p.photo)srcs.push(p.photo);}));
     (t.bench||[]).forEach(p=>{if(p&&p.photo)srcs.push(p.photo);}); });
   ensureImages(srcs,()=>{ drawTeam(document.getElementById('cv_orange'),lastTeams.orange,'orange'); drawTeam(document.getElementById('cv_green'),lastTeams.green,'green'); });
@@ -1301,7 +1437,14 @@ document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id=
 document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target.id==='editOverlay')closeEditLineup(); });
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
 document.getElementById('loginOverlay').addEventListener('click',e=>{ if(e.target.id==='loginOverlay')closeLogin(); });
-document.getElementById('loginPw').addEventListener('keydown',e=>{ if(e.key==='Enter')doLogin(); });
+document.getElementById('adminOverlay').addEventListener('click',e=>{ if(e.target.id==='adminOverlay')closeAdminManage(); });
+document.getElementById('loginPw').addEventListener('keydown',e=>{ if(e.key==='Enter')doLoginOrSignup(); });
+(function(){ const cc=document.getElementById('cropCanvas');
+  cc.addEventListener('pointerdown',cropDown); cc.addEventListener('pointermove',cropMove);
+  cc.addEventListener('pointerup',cropUp); cc.addEventListener('pointercancel',cropUp);
+  cc.addEventListener('wheel',e=>{ e.preventDefault(); cropZoom(e.deltaY<0?0.12:-0.12); }, {passive:false});
+  document.getElementById('cropOverlay').addEventListener('click',e=>{ if(e.target.id==='cropOverlay')closeCrop(); });
+})();
 document.addEventListener('pointermove',onDragMove);
 document.addEventListener('pointerup',onDragEnd);
 document.addEventListener('pointercancel',onDragEnd);
