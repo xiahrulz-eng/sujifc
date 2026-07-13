@@ -1,6 +1,7 @@
 /* 수지FC 라인업 생성기 - 서비스워커 (오프라인 지원) */
-const CACHE = 'suji-fc-v11';
-const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './xlsx.full.min.js'];
+const CACHE = 'suji-fc-v12';
+const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './xlsx.full.min.js',
+  './firebase-app-compat.js', './firebase-auth-compat.js', './firebase-firestore-compat.js', './firebase-config.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -19,6 +20,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // 다른 도메인(예: Firebase/Firestore) 요청은 서비스워커가 건드리지 않음
+  try { if (new URL(req.url).origin !== location.origin) return; } catch (_) { return; }
 
   // 페이지 요청: 네트워크 우선(최신 유지), 오프라인이면 캐시
   if (req.mode === 'navigate') {

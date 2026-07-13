@@ -14,6 +14,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
 <script src="xlsx.full.min.js"></script>
+<script src="firebase-app-compat.js"></script>
+<script src="firebase-auth-compat.js"></script>
+<script src="firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 <style>
   :root{
     /* Industrial Chrome & Navy */
@@ -289,6 +293,12 @@
   .guest-chip .gs{color:var(--on-var); font-size:11px;}
   .guest-chip .gx{cursor:pointer; color:var(--outline); font-weight:700; padding:0 2px; font-size:13px;}
   .guest-chip .gx:hover{color:var(--lime-bright);}
+  /* 운영진 전용 요소는 로그인 전 숨김 */
+  body:not(.admin) .admin-only{display:none !important;}
+  #authBtn{border:1px solid rgba(168,178,193,.4);}
+  body.admin #authInfo{color:var(--tertiary); font-family:var(--f-label); font-size:11px; letter-spacing:.05em;}
+  .ro-note{font-family:var(--f-label); font-size:11px; letter-spacing:.04em; color:var(--on-var);
+    background:var(--c-low); border:1px solid var(--outline-v); border-radius:var(--r); padding:8px 12px; margin-bottom:12px;}
   /* edit modal: position quick buttons + exclude */
   .pos-btns{display:flex; gap:6px; margin:4px 0 14px;}
   .pos-btns button{flex:1; font-family:var(--f-label); font-size:12px; font-weight:700; padding:9px 0; border-radius:var(--r);
@@ -338,7 +348,8 @@
     <button id="tab-match" onclick="showView('match')">경기 결과</button>
     <button id="tab-stats" onclick="showView('stats')">개인 기록</button>
   </div>
-  <span class="spacer">Auto Lineup Generator · v0.3</span>
+  <span class="spacer" id="authInfo"></span>
+  <button id="authBtn" class="btn sm" style="display:none;" onclick="authClick()">운영진 로그인</button>
 </header>
 
 <!-- ================= LINEUP VIEW ================= -->
@@ -401,7 +412,7 @@
       <h2 class="sec">🏟️ 라인업 결과
         <span class="count" style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn sm" onclick="openHistory()">🕘 히스토리</button>
-          <button class="btn sm" onclick="registerMatch()">📋 경기 등록</button>
+          <button class="btn sm admin-only" onclick="registerMatch()">📋 경기 등록</button>
           <button class="btn sm" onclick="saveImage()">💾 이미지 저장</button>
         </span>
       </h2>
@@ -434,12 +445,12 @@
       <div class="tb-right">
         <button class="btn ghost sm" onclick="toggleAll(true)">전체 참석</button>
         <button class="btn ghost sm" onclick="toggleAll(false)">전체 해제</button>
-        <button class="btn ghost sm" onclick="resetToDefault()">♻️ 기본명단</button>
-        <button class="btn ghost sm" onclick="downloadTemplate()">📄 양식</button>
-        <button class="btn ghost sm" onclick="document.getElementById('xlsInput').click()">⬆️ 불러오기</button>
+        <button class="btn ghost sm admin-only" onclick="resetToDefault()">♻️ 기본명단</button>
+        <button class="btn ghost sm admin-only" onclick="downloadTemplate()">📄 양식</button>
+        <button class="btn ghost sm admin-only" onclick="document.getElementById('xlsInput').click()">⬆️ 불러오기</button>
         <button class="btn ghost sm" onclick="exportRoster()">⬇️ 내보내기</button>
         <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none">
-        <button class="btn primary sm" onclick="openAdd()">+ 선수 추가</button>
+        <button class="btn primary sm admin-only" onclick="openAdd()">+ 선수 추가</button>
       </div>
     </div>
     <div class="member-list" id="roster"></div>
@@ -470,6 +481,20 @@
 
 <!-- history modal -->
 <div class="overlay" id="histOverlay"><div class="modal wide" id="histBody"></div></div>
+
+<!-- login modal -->
+<div class="overlay" id="loginOverlay"><div class="modal">
+  <h3>🔒 운영진 로그인</h3>
+  <p class="muted" style="font-size:12px; text-align:center; margin:0 0 16px;">명단·사진·기록을 수정하려면 로그인하세요.<br>선수는 로그인 없이 열람만 하면 됩니다.</p>
+  <label class="fld">이메일</label>
+  <input type="email" id="loginEmail" placeholder="admin@example.com" autocomplete="username">
+  <label class="fld">비밀번호</label>
+  <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+  <div class="modal-btns">
+    <button class="btn primary" style="flex:1;" onclick="doLogin()">로그인</button>
+    <button class="btn ghost" style="flex:1;" onclick="closeLogin()">취소</button>
+  </div>
+</div></div>
 
 <!-- modal -->
 <div class="overlay" id="overlay">
@@ -539,6 +564,77 @@ let hitMap={orange:[],green:[]};
 let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
 
+/* ============ Firebase 연동 (실시간 동기화 · 운영진 편집) ============ */
+let FB=null, FBauth=null, isAdmin=false, attendMap={};
+function canEdit(){ return !FB || isAdmin; }
+function requireAdmin(){ if(canEdit()) return true; toast('운영진 로그인이 필요합니다 🔒'); return false; }
+function loadAttend(){ const r=localStorage.getItem('suziFC_attend'); if(r){try{attendMap=JSON.parse(r);}catch(e){attendMap={};}} }
+function saveAttend(){ localStorage.setItem('suziFC_attend',JSON.stringify(attendMap)); }
+function applyAttendToMembers(){ members.forEach(m=>{ if(attendMap[m.id]!==undefined) m.attend=attendMap[m.id]; }); }
+function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,skill:m.skill,photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},order:(m.order!==undefined?m.order:(i||0))}; }
+function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||''}; }
+function initFirebase(){
+  if(!window.firebase || !window.SUJI_FIREBASE_CONFIG) return false;
+  try{
+    firebase.initializeApp(window.SUJI_FIREBASE_CONFIG);
+    FB=firebase.firestore(); FBauth=firebase.auth();
+    FB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    FBauth.onAuthStateChanged(u=>{ isAdmin=!!u; updateAdminUI(); if(u) maybeSeed(); });
+    subscribeRoster(); subscribeMatches();
+    return true;
+  }catch(e){ console.error('Firebase init 실패',e); FB=null; return false; }
+}
+function subscribeRoster(){
+  FB.collection('roster').onSnapshot(snap=>{
+    if(snap.empty) return;
+    const arr=[];
+    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,name:d.name,age:(d.age??null),position:d.position||'MF',skill:d.skill||'중',photo:d.photo||null,stats:d.stats||{...EMPTY_STATS},order:(d.order??0),attend:(attendMap[doc.id]!==undefined?attendMap[doc.id]:true)}); });
+    arr.sort((a,b)=>(a.order-b.order)||a.name.localeCompare(b.name,'ko'));
+    members=arr; save();
+    renderRoster(); renderSummary();
+    if(document.getElementById('view-stats').classList.contains('on')) renderStats();
+  }, err=>console.error('roster onSnapshot',err));
+}
+function subscribeMatches(){
+  FB.collection('matches').onSnapshot(snap=>{
+    const arr=[];
+    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,at:d.at||0,date:d.date||'',snap:d.snap,orangeScore:(d.orangeScore??''),greenScore:(d.greenScore??''),memo:d.memo||''}); });
+    arr.sort((a,b)=>b.at-a.at);
+    matches=arr; saveMatches();
+    if(document.getElementById('view-match').classList.contains('on')) renderMatches();
+  }, err=>console.error('matches onSnapshot',err));
+}
+function maybeSeed(){ if(!FB||!isAdmin) return; FB.collection('roster').limit(1).get().then(s=>{ if(s.empty && members.length){ fbReplaceRoster(members); toast('클라우드에 명단을 업로드했습니다 ☁️'); } }).catch(()=>{}); }
+function fbSaveMember(m){ if(!FB||!isAdmin||!m) return; FB.collection('roster').doc(m.id).set(memberDoc(m)).catch(e=>console.error(e)); }
+function fbDeleteMember(id){ if(!FB||!isAdmin) return; FB.collection('roster').doc(id).delete().catch(e=>console.error(e)); }
+function fbReplaceRoster(list){ if(!FB||!isAdmin) return; FB.collection('roster').get().then(snap=>{ const batch=FB.batch(); snap.forEach(d=>batch.delete(d.ref)); list.forEach((m,i)=>batch.set(FB.collection('roster').doc(m.id),memberDoc(m,i))); return batch.commit(); }).catch(e=>console.error(e)); }
+function fbSaveMatch(mt){ if(!FB||!isAdmin||!mt) return; FB.collection('matches').doc(mt.id).set(matchDoc(mt)).catch(e=>console.error(e)); }
+function fbDeleteMatch(id){ if(!FB||!isAdmin) return; FB.collection('matches').doc(id).delete().catch(e=>console.error(e)); }
+function updateAdminUI(){
+  const admin=canEdit();
+  document.body.classList.toggle('admin',admin);
+  const btn=document.getElementById('authBtn'), info=document.getElementById('authInfo');
+  if(FB){ btn.style.display=''; btn.textContent=isAdmin?'로그아웃':'운영진 로그인'; info.textContent=isAdmin?'● 운영진 모드':''; }
+  else { btn.style.display='none'; info.textContent=''; }
+  renderRoster();
+  if(document.getElementById('view-stats').classList.contains('on')) renderStats();
+  if(document.getElementById('view-match').classList.contains('on')) renderMatches();
+}
+function authClick(){ if(!FB) return; if(isAdmin){ FBauth.signOut(); toast('로그아웃되었습니다'); } else openLogin(); }
+function openLogin(){ document.getElementById('loginEmail').value=''; document.getElementById('loginPw').value=''; document.getElementById('loginOverlay').classList.add('on'); }
+function closeLogin(){ document.getElementById('loginOverlay').classList.remove('on'); }
+function doLogin(){ const em=document.getElementById('loginEmail').value.trim(), pw=document.getElementById('loginPw').value;
+  if(!em||!pw){ toast('이메일과 비밀번호를 입력하세요'); return; }
+  FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ closeLogin(); toast('운영진 로그인 성공 ✅'); }).catch(e=>{ console.error(e); toast('로그인 실패 — 이메일/비밀번호를 확인하세요'); }); }
+function compressImage(src,cb){
+  const img=new Image();
+  img.onload=()=>{ const max=256; let w=img.width,h=img.height;
+    if(w>h){ if(w>max){h=Math.round(h*max/w); w=max;} } else { if(h>max){w=Math.round(w*max/h); h=max;} }
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+    try{ cb(c.toDataURL('image/jpeg',0.72)); }catch(e){ cb(src); } };
+  img.onerror=()=>cb(src); img.src=src;
+}
+
 /* ============ 저장/생성 ============ */
 function save(){ localStorage.setItem('suziFC_members',JSON.stringify(members)); }
 function load(){ const r=localStorage.getItem('suziFC_members'); if(r){try{members=JSON.parse(r);}catch(e){members=[];}} if(!members.length) seed();
@@ -547,8 +643,9 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function cloneDefault(){ return DEFAULT_ROSTER.map(r=>({id:uid(),name:r[0],age:r[1],position:r[2],skill:r[3],photo:null,attend:true,stats:{...EMPTY_STATS}})); }
 function seed(){ members=cloneDefault(); save(); }
 function resetToDefault(){
+  if(!requireAdmin())return;
   if(!confirm('현재 명단을 지우고 공통 기본 명단으로 되돌립니다.\n(추가/수정한 선수와 업로드한 사진이 사라집니다)\n\n계속할까요?')) return;
-  members=cloneDefault(); save(); buildChips(); renderRoster(); renderSummary(); toast('기본 명단으로 초기화했습니다 ♻️');
+  members=cloneDefault(); members.forEach((m,i)=>m.order=i); save(); fbReplaceRoster(members); buildChips(); renderRoster(); renderSummary(); toast('기본 명단으로 초기화했습니다 ♻️');
 }
 
 /* ============ 게스트 ============ */
@@ -637,8 +734,8 @@ function renderRoster(){
       ${m.age?`<span class="mr-age">${m.age}세</span>`:''}
       <span class="mr-sp"></span>
       <button class="mr-toggle ${m.attend?'on':''}" onclick="toggleAttend('${m.id}')">${m.attend?'참석':'불참'}</button>
-      <button class="mr-ic" onclick="openEdit('${m.id}')" title="수정">✏️</button>
-      <button class="mr-ic" onclick="delMember('${m.id}')" title="삭제">🗑️</button>`;
+      <button class="mr-ic admin-only" onclick="openEdit('${m.id}')" title="수정">✏️</button>
+      <button class="mr-ic admin-only" onclick="delMember('${m.id}')" title="삭제">🗑️</button>`;
     box.appendChild(el);
   });
 }
@@ -652,17 +749,17 @@ function renderSummary(){
   document.getElementById('s-need').textContent=need;
   document.getElementById('s-attend-box').classList.toggle('warn',total<need);
 }
-function toggleAttend(id){ const m=members.find(x=>x.id===id); m.attend=!m.attend; save(); renderRoster(); renderSummary(); }
-function toggleAll(v){ filtered().forEach(m=>m.attend=v); save(); renderRoster(); renderSummary(); }
-function delMember(id){ if(!confirm('이 선수를 삭제할까요?'))return; members=members.filter(m=>m.id!==id); save(); renderRoster(); renderSummary(); }
+function toggleAttend(id){ const m=members.find(x=>x.id===id); if(!m)return; m.attend=!m.attend; attendMap[id]=m.attend; saveAttend(); save(); renderRoster(); renderSummary(); }
+function toggleAll(v){ filtered().forEach(m=>{m.attend=v; attendMap[m.id]=v;}); saveAttend(); save(); renderRoster(); renderSummary(); }
+function delMember(id){ if(!requireAdmin())return; if(!confirm('이 선수를 삭제할까요?'))return; members=members.filter(m=>m.id!==id); save(); fbDeleteMember(id); renderRoster(); renderSummary(); }
 
 /* ============ 모달 ============ */
-function openAdd(){ editingId=null; tempPhoto=null;
+function openAdd(){ if(!requireAdmin())return; editingId=null; tempPhoto=null;
   document.getElementById('modalTitle').textContent='선수 추가';
   document.getElementById('mName').value=''; document.getElementById('mAge').value='';
   document.getElementById('mPos').value='MF'; document.getElementById('mSkill').value='중';
   setAva(null,'사진 선택'); document.getElementById('overlay').classList.add('on'); }
-function openEdit(id){ const m=members.find(x=>x.id===id); editingId=id; tempPhoto=m.photo;
+function openEdit(id){ if(!requireAdmin())return; const m=members.find(x=>x.id===id); editingId=id; tempPhoto=m.photo;
   document.getElementById('modalTitle').textContent='선수 수정';
   document.getElementById('mName').value=m.name; document.getElementById('mAge').value=m.age||'';
   document.getElementById('mPos').value=m.position; document.getElementById('mSkill').value=m.skill;
@@ -674,14 +771,16 @@ function setAva(photo,fb){ const a=document.getElementById('avaEdit');
 function clearPhoto(){ tempPhoto=null; const nm=document.getElementById('mName').value.trim(); setAva(null,nm?nm[0]:'사진 선택'); toast('사진을 삭제했습니다'); }
 function closeModal(){ document.getElementById('overlay').classList.remove('on'); }
 document.getElementById('photoInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader(); r.onload=ev=>{tempPhoto=ev.target.result;setAva(tempPhoto,'');}; r.readAsDataURL(f); });
+  const r=new FileReader(); r.onload=ev=>{ compressImage(ev.target.result,d=>{ tempPhoto=d; setAva(tempPhoto,''); }); }; r.readAsDataURL(f); });
 function saveMember(){
+  if(!requireAdmin())return;
   const name=document.getElementById('mName').value.trim(); if(!name){toast('이름을 입력하세요');return;}
   const age=parseInt(document.getElementById('mAge').value)||null;
   const pos=document.getElementById('mPos').value, skill=document.getElementById('mSkill').value;
-  if(editingId){ Object.assign(members.find(x=>x.id===editingId),{name,age,position:pos,skill,photo:tempPhoto}); }
-  else{ members.push({id:uid(),name,age,position:pos,skill,photo:tempPhoto,attend:true,stats:{...EMPTY_STATS}}); }
-  save(); renderRoster(); renderSummary(); closeModal(); toast(editingId?'수정 완료':'선수 추가 완료');
+  let target;
+  if(editingId){ target=members.find(x=>x.id===editingId); Object.assign(target,{name,age,position:pos,skill,photo:tempPhoto}); }
+  else{ target={id:uid(),name,age,position:pos,skill,photo:tempPhoto,attend:true,stats:{...EMPTY_STATS},order:Date.now()}; members.push(target); }
+  save(); fbSaveMember(target); renderRoster(); renderSummary(); closeModal(); toast(editingId?'수정 완료':'선수 추가 완료');
 }
 
 /* ============ 엑셀 양식 / 업로드 ============ */
@@ -740,9 +839,11 @@ function rowsToMembers(rows){
   return out;
 }
 function applyImport(list){
+  if(!requireAdmin())return;
   if(!list.length){ toast('가져올 선수가 없습니다. 양식(이름/나이/포지션/실력)을 확인하세요'); return; }
   const replace=confirm(`${list.length}명을 불러왔습니다.\n\n[확인] 기존 명단을 대체합니다.\n[취소] 기존 명단에 추가합니다.`);
-  members = replace ? list : members.concat(list);
+  if(replace){ list.forEach((m,i)=>m.order=i); members=list; fbReplaceRoster(members); }
+  else { list.forEach((m,i)=>m.order=Date.now()+i); members=members.concat(list); list.forEach(m=>fbSaveMember(m)); }
   save(); buildChips(); renderRoster(); renderSummary();
   toast(`${list.length}명 ${replace?'대체':'추가'} 완료 ✅`);
 }
@@ -1123,9 +1224,10 @@ function saveMatches(){ localStorage.setItem('suziFC_matches',JSON.stringify(mat
 function loadMatches(){ const r=localStorage.getItem('suziFC_matches'); if(r){try{matches=JSON.parse(r);}catch(e){matches=[];}} }
 function todayStr(){ const d=new Date(),p=n=>('0'+n).slice(-2); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function registerMatch(){
+  if(!requireAdmin())return;
   if(!lastTeams){ toast('먼저 팀을 생성하세요'); return; }
-  matches.unshift({id:uid(),at:Date.now(),date:todayStr(),snap:snapshotTeams(),orangeScore:'',greenScore:'',memo:''});
-  saveMatches(); toast('경기를 등록했습니다 📋 (경기 결과 탭에서 점수 입력)');
+  const mt={id:uid(),at:Date.now(),date:todayStr(),snap:snapshotTeams(),orangeScore:'',greenScore:'',memo:''};
+  matches.unshift(mt); saveMatches(); fbSaveMatch(mt); toast('경기를 등록했습니다 📋 (경기 결과 탭에서 점수 입력)');
 }
 function renderMatches(){
   const box=document.getElementById('matchList');
@@ -1137,15 +1239,15 @@ function renderMatches(){
     const el=document.createElement('div'); el.className='match-card';
     el.innerHTML=`
       <div class="match-head">
-        <input type="date" value="${mt.date}" onchange="updMatch('${mt.id}','date',this.value)" style="max-width:160px">
+        <input type="date" value="${mt.date}" ${canEdit()?'':'disabled'} onchange="updMatch('${mt.id}','date',this.value)" style="max-width:160px">
         <span class="match-date">${s.teamSize}:${s.teamSize} 경기</span>
-        <span style="margin-left:auto"><button class="btn danger sm" onclick="delMatch('${mt.id}')">🗑️ 삭제</button></span>
+        <span style="margin-left:auto"><button class="btn danger sm admin-only" onclick="delMatch('${mt.id}')">🗑️ 삭제</button></span>
       </div>
       <div class="match-score">
         <span class="ms-team"><span class="ms-dot" style="background:${s.orange.color}"></span>${s.orange.name}</span>
-        <input class="ms-in" type="number" min="0" value="${mt.orangeScore}" placeholder="-" onchange="updMatch('${mt.id}','orangeScore',this.value)">
+        <input class="ms-in" type="number" min="0" value="${mt.orangeScore}" placeholder="-" ${canEdit()?'':'disabled'} onchange="updMatch('${mt.id}','orangeScore',this.value)">
         <span class="ms-vs">:</span>
-        <input class="ms-in" type="number" min="0" value="${mt.greenScore}" placeholder="-" onchange="updMatch('${mt.id}','greenScore',this.value)">
+        <input class="ms-in" type="number" min="0" value="${mt.greenScore}" placeholder="-" ${canEdit()?'':'disabled'} onchange="updMatch('${mt.id}','greenScore',this.value)">
         <span class="ms-team"><span class="ms-dot" style="background:${s.green.color}"></span>${s.green.name}</span>
       </div>
       <div class="match-rosters">
@@ -1153,12 +1255,12 @@ function renderMatches(){
         <div class="mr-col"><h4 style="color:${s.green.color}">${s.green.name} (${gNames.length})</h4>${gNames.join(', ')}</div>
       </div>
       <label class="fld">메모 (득점자, 특이사항 등)</label>
-      <input type="text" value="${(mt.memo||'').replace(/"/g,'&quot;')}" placeholder="예) 오렌지 홍길동 2골, MOM 김철수" onchange="updMatch('${mt.id}','memo',this.value)">`;
+      <input type="text" value="${(mt.memo||'').replace(/"/g,'&quot;')}" placeholder="예) 오렌지 홍길동 2골, MOM 김철수" ${canEdit()?'':'disabled'} onchange="updMatch('${mt.id}','memo',this.value)">`;
     box.appendChild(el);
   });
 }
-function updMatch(id,field,val){ const m=matches.find(x=>x.id===id); if(!m)return; m[field]=val; saveMatches(); }
-function delMatch(id){ if(!confirm('이 경기를 삭제할까요?'))return; matches=matches.filter(m=>m.id!==id); saveMatches(); renderMatches(); }
+function updMatch(id,field,val){ if(!requireAdmin())return; const m=matches.find(x=>x.id===id); if(!m)return; m[field]=val; saveMatches(); fbSaveMatch(m); }
+function delMatch(id){ if(!requireAdmin())return; if(!confirm('이 경기를 삭제할까요?'))return; matches=matches.filter(m=>m.id!==id); saveMatches(); fbDeleteMatch(id); renderMatches(); }
 
 /* ============ 개인 기록 ============ */
 const STAT_COLS=[['games','경기'],['goals','골'],['assists','도움'],['saves','세이브']];
@@ -1174,13 +1276,13 @@ function renderStats(q){
     html+=`<tr><td class="name-col"><span class="p-name">
       <span class="bc-ava"${ava}>${m.photo?'':m.name[0]}</span>${m.name}
       <span class="badge pos" style="background:${POS_COLORS[m.position]}">${m.position}</span></span></td>`;
-    STAT_COLS.forEach(c=>{ html+=`<td><input class="s-in" type="number" min="0" value="${st[c[0]]||0}" onchange="updStat('${m.id}','${c[0]}',this.value)"></td>`; });
+    STAT_COLS.forEach(c=>{ html+=`<td><input class="s-in" type="number" min="0" value="${st[c[0]]||0}" ${canEdit()?'':'disabled'} onchange="updStat('${m.id}','${c[0]}',this.value)"></td>`; });
     html+=`</tr>`;
   });
   html+=`</tbody>`; table.innerHTML=html;
 }
-function updStat(id,key,val){ const m=members.find(x=>x.id===id); if(!m)return; if(!m.stats)m.stats={...EMPTY_STATS};
-  m.stats[key]=Math.max(0,parseInt(val)||0); save(); }
+function updStat(id,key,val){ if(!requireAdmin())return; const m=members.find(x=>x.id===id); if(!m)return; if(!m.stats)m.stats={...EMPTY_STATS};
+  m.stats[key]=Math.max(0,parseInt(val)||0); save(); fbSaveMember(m); }
 function exportStats(){
   const header=['이름','포지션','경기','골','도움','세이브'];
   const data=members.map(m=>{ const s=m.stats||EMPTY_STATS; return [m.name,m.position,s.games||0,s.goals||0,s.assists||0,s.saves||0]; });
@@ -1198,12 +1300,16 @@ document.getElementById('teamSize').addEventListener('change',renderSummary);
 document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeModal(); });
 document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target.id==='editOverlay')closeEditLineup(); });
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
+document.getElementById('loginOverlay').addEventListener('click',e=>{ if(e.target.id==='loginOverlay')closeLogin(); });
+document.getElementById('loginPw').addEventListener('keydown',e=>{ if(e.key==='Enter')doLogin(); });
 document.addEventListener('pointermove',onDragMove);
 document.addEventListener('pointerup',onDragEnd);
 document.addEventListener('pointercancel',onDragEnd);
 
 /* 초기화 */
-load(); loadGuests(); loadMatches(); loadHistory(); buildChips(); renderRoster(); renderGuests(); renderSummary();
+load(); loadGuests(); loadMatches(); loadHistory(); loadAttend(); applyAttendToMembers();
+buildChips(); renderRoster(); renderGuests(); renderSummary();
+initFirebase(); updateAdminUI();
 
 /* PWA: 서비스워커 등록 (오프라인 · 홈화면 설치) */
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
