@@ -1,7 +1,7 @@
 /* 수지FC 라인업 생성기 - 서비스워커 (오프라인 지원) */
-const CACHE = 'suji-fc-v17';
+const CACHE = 'suji-fc-v18';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './xlsx.full.min.js',
-  './firebase-app-compat.js', './firebase-auth-compat.js', './firebase-firestore-compat.js', './firebase-config.js',
+  './firebase-app-compat.js', './firebase-auth-compat.js', './firebase-firestore-compat.js', './firebase-storage-compat.js', './firebase-config.js',
   './logo-mark.png', './profile-none.png'];
 
 self.addEventListener('install', e => {

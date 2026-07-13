@@ -17,6 +17,7 @@
 <script src="firebase-app-compat.js"></script>
 <script src="firebase-auth-compat.js"></script>
 <script src="firebase-firestore-compat.js"></script>
+<script src="firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <style>
   :root{
@@ -180,7 +181,8 @@
   .chip:hover{border-color:var(--outline); color:var(--on);}
   .chip.on{background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff; border-color:rgba(168,178,193,.35);
     box-shadow:inset 1px 1px 0 rgba(168,178,193,.25);}
-  .tb-right{margin-left:auto; display:flex; gap:8px;}
+  .tb-right{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  #rosterTools{gap:8px; flex-wrap:wrap; align-items:center;}
 
   .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px;}
   .rcard{
@@ -322,8 +324,8 @@
   .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:7px; margin:8px 0 12px;}
   .gal-item{position:relative; aspect-ratio:1; border-radius:var(--r); overflow:hidden; background:var(--c-lowest); border:1px solid var(--outline-v);}
   .gal-item img{width:100%; height:100%; object-fit:cover; cursor:pointer; display:block;}
-  .gal-video{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:22px; text-decoration:none; color:var(--on);}
-  .gal-video span{font-size:10px; font-family:var(--f-label);}
+  .gal-item.gal-vid{aspect-ratio:auto;}
+  .gal-item video{width:100%; height:100%; object-fit:cover; display:block; background:#000; border-radius:var(--r);}
   .gal-del{position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; border:none; background:rgba(12,14,17,.8);
     color:var(--lime-bright); font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center;}
   .gallery-add{display:flex; gap:8px; flex-wrap:wrap;}
@@ -490,10 +492,13 @@
       <div class="tb-right">
         <button class="btn ghost sm" onclick="toggleAll(true)">전체 참석</button>
         <button class="btn ghost sm" onclick="toggleAll(false)">전체 해제</button>
-        <button class="btn ghost sm admin-only" onclick="resetToDefault()">♻️ 기본명단</button>
-        <button class="btn ghost sm admin-only" onclick="downloadTemplate()">📄 양식</button>
-        <button class="btn ghost sm admin-only" onclick="document.getElementById('xlsInput').click()">⬆️ 불러오기</button>
-        <button class="btn ghost sm" onclick="exportRoster()">⬇️ 내보내기</button>
+        <button class="btn ghost sm" onclick="toggleRosterTools()">⚙️ 명단 도구</button>
+        <span id="rosterTools" style="display:none;">
+          <button class="btn ghost sm admin-only" onclick="resetToDefault()">♻️ 기본명단</button>
+          <button class="btn ghost sm admin-only" onclick="downloadTemplate()">📄 양식</button>
+          <button class="btn ghost sm admin-only" onclick="document.getElementById('xlsInput').click()">⬆️ 불러오기</button>
+          <button class="btn ghost sm" onclick="exportRoster()">⬇️ 내보내기</button>
+        </span>
         <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none">
         <button class="btn primary sm admin-only" onclick="openAdd()">+ 선수 추가</button>
       </div>
@@ -599,6 +604,7 @@
 
 <!-- match media input + lightbox -->
 <input type="file" id="mediaInput" accept="image/*" style="display:none">
+<input type="file" id="videoInput" accept="video/*" style="display:none">
 <div class="overlay" id="lightbox"><img id="lightboxImg" alt=""></div>
 
 <!-- photo crop modal -->
@@ -658,7 +664,7 @@ let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
 
 /* ============ Firebase 연동 (실시간 동기화 · 운영진 편집) ============ */
-let FB=null, FBauth=null, isAdmin=false, currentUser=null, attendMap={}, authMode='login';
+let FB=null, FBauth=null, FBstorage=null, isAdmin=false, currentUser=null, attendMap={}, authMode='login';
 let teamConfig={orange:{name:'오렌지 팀',color:'#ff8a2b'},green:{name:'그린 팀',color:'#3ddc84'}};
 function canEdit(){ return !FB || isAdmin; }
 function loadTeamConfig(){ const r=localStorage.getItem('suziFC_teams'); if(r){try{const d=JSON.parse(r); if(d&&d.orange&&d.green)teamConfig=d;}catch(e){}} }
@@ -686,6 +692,7 @@ function initFirebase(){
   try{
     firebase.initializeApp(window.SUJI_FIREBASE_CONFIG);
     FB=firebase.firestore(); FBauth=firebase.auth();
+    try{ FBstorage=firebase.storage(); }catch(e){ FBstorage=null; }
     FB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
     FBauth.onAuthStateChanged(u=>{ currentUser=u;
       if(u){ FB.collection('admins').doc(u.uid).get().then(doc=>{ isAdmin=doc.exists; updateAdminUI(); if(isAdmin) maybeSeed(); }).catch(()=>{ isAdmin=false; updateAdminUI(); }); }
@@ -908,6 +915,7 @@ function buildChips(){
   });
 }
 function setFilter(key,val){ filter[key]=val; buildChips(); renderRoster(); }
+function toggleRosterTools(){ const el=document.getElementById('rosterTools'); el.style.display = (el.style.display==='none'||!el.style.display)?'inline-flex':'none'; }
 
 /* ============ 명단 렌더 ============ */
 function filtered(){
@@ -1430,6 +1438,7 @@ function registerMatch(){
   const mt={id:uid(),at:Date.now(),date:todayStr(),snap:snapshotTeams(),orangeScore:'',greenScore:'',memo:''};
   matches.unshift(mt); saveMatches(); fbSaveMatch(mt); toast('경기를 등록했습니다 📋 (경기 결과 탭에서 점수 입력)');
 }
+const expandedMatches=new Set();
 function scoreDisp(v){ return (v===''||v==null)?'-':v; }
 function rosterHtml(s,k){
   const t=s[k]; let html=`<div class="mr-col"><h4 style="color:${t.color}">${t.name}</h4>`;
@@ -1458,11 +1467,14 @@ function renderMatches(){
       <div class="match-detail" id="md_${mt.id}" style="display:none"></div>`;
     box.appendChild(el);
   });
+  // 펼쳐둔 경기는 재렌더 후에도 유지 (스코어 입력 시 접힘 방지)
+  expandedMatches.forEach(id=>{ const d=document.getElementById('md_'+id), exp=document.getElementById('exp_'+id);
+    if(d){ d.style.display='block'; if(exp)exp.textContent='▴'; renderMatchDetail(id); } else expandedMatches.delete(id); });
 }
 function toggleMatch(id){
   const d=document.getElementById('md_'+id), exp=document.getElementById('exp_'+id);
-  if(d.style.display==='none'){ d.style.display='block'; exp.textContent='▴'; renderMatchDetail(id); }
-  else { d.style.display='none'; exp.textContent='▾'; }
+  if(d.style.display==='none'){ expandedMatches.add(id); d.style.display='block'; exp.textContent='▴'; renderMatchDetail(id); }
+  else { expandedMatches.delete(id); d.style.display='none'; exp.textContent='▾'; }
 }
 function renderMatchDetail(id){
   const mt=matches.find(x=>x.id===id); if(!mt)return; const s=mt.snap, ed=canEdit();
@@ -1479,7 +1491,7 @@ function renderMatchDetail(id){
     <div class="gallery" id="gal_${id}"><span class="muted" style="font-size:12px">불러오는 중...</span></div>
     <div class="gallery-add">
       <button class="btn sm" onclick="addMatchPhoto('${id}')">📷 사진 추가</button>
-      <button class="btn sm" onclick="addMatchVideo('${id}')">🎬 영상 링크 추가</button>
+      <button class="btn sm" onclick="addMatchVideo('${id}')">🎬 동영상 추가</button>
     </div>`;
   if(ed) html+=`<div style="margin-top:14px"><button class="btn danger sm admin-only" onclick="delMatch('${id}')">🗑️ 경기 삭제</button></div>`;
   document.getElementById('md_'+id).innerHTML=html;
@@ -1491,8 +1503,9 @@ function loadGallery(id){
   FB.collection('matches').doc(id).collection('media').orderBy('at').get().then(snap=>{
     if(snap.empty){ g.innerHTML='<span class="muted" style="font-size:12px">첨부된 사진·영상이 없습니다.</span>'; return; }
     let html='';
-    snap.forEach(doc=>{ const m=doc.data(), del=canEdit()?`<button class="gal-del" onclick="event.stopPropagation();event.preventDefault();delMedia('${id}','${doc.id}')">✕</button>`:'';
-      if(m.type==='video') html+=`<a class="gal-item gal-video" href="${m.url}" target="_blank" rel="noopener">🎬<span>영상 보기</span>${del}</a>`;
+    snap.forEach(doc=>{ const m=doc.data();
+      const del=canEdit()?`<button class="gal-del" onclick="event.stopPropagation();delMedia('${id}','${doc.id}','${(m.path||'').replace(/'/g,'')}')">✕</button>`:'';
+      if(m.type==='video') html+=`<div class="gal-item gal-vid"><video src="${m.url}" controls preload="metadata"></video>${del}</div>`;
       else html+=`<div class="gal-item"><img src="${m.data}" onclick="openLightbox(this.src)">${del}</div>`;
     });
     g.innerHTML=html;
@@ -1500,12 +1513,11 @@ function loadGallery(id){
 }
 let pendingMediaMatch=null;
 function addMatchPhoto(id){ if(!FB){ toast('클라우드 연결이 필요합니다'); return; } pendingMediaMatch=id; document.getElementById('mediaInput').click(); }
-function addMatchVideo(id){ if(!FB){ toast('클라우드 연결이 필요합니다'); return; }
-  const url=prompt('영상 링크(URL)를 붙여넣으세요 (유튜브 등):'); if(!url)return;
-  FB.collection('matches').doc(id).collection('media').add({type:'video',url:url.trim(),at:Date.now()})
-    .then(()=>{ toast('영상 링크를 추가했습니다 🎬'); loadGallery(id); }).catch(e=>{ console.error(e); toast('추가 실패 (규칙 확인)'); }); }
-function delMedia(id,mid){ if(!requireAdmin())return; if(!confirm('이 항목을 삭제할까요?'))return;
-  FB.collection('matches').doc(id).collection('media').doc(mid).delete().then(()=>loadGallery(id)).catch(e=>{ console.error(e); toast('삭제 실패'); }); }
+function addMatchVideo(id){ if(!FBstorage){ toast('동영상 업로드는 Storage 설정이 필요합니다'); return; } pendingMediaMatch=id; document.getElementById('videoInput').click(); }
+function delMedia(id,mid,path){ if(!requireAdmin())return; if(!confirm('이 항목을 삭제할까요?'))return;
+  FB.collection('matches').doc(id).collection('media').doc(mid).delete().then(()=>{
+    if(path && FBstorage){ FBstorage.ref(path).delete().catch(()=>{}); } loadGallery(id);
+  }).catch(e=>{ console.error(e); toast('삭제 실패'); }); }
 function openLightbox(src){ document.getElementById('lightboxImg').src=src; document.getElementById('lightbox').classList.add('on'); }
 function updMatch(id,field,val){ if(!requireAdmin())return; const m=matches.find(x=>x.id===id); if(!m)return; m[field]=val; saveMatches(); fbSaveMatch(m); }
 function delMatch(id){ if(!requireAdmin())return; if(!confirm('이 경기를 삭제할까요?'))return; matches=matches.filter(m=>m.id!==id); saveMatches(); fbDeleteMatch(id); renderMatches(); }
@@ -1579,6 +1591,14 @@ document.getElementById('mediaInput').addEventListener('change',e=>{ const f=e.t
     FB.collection('matches').doc(id).collection('media').add({type:'photo',data:d,at:Date.now()})
       .then(()=>{ toast('사진을 추가했습니다 📷'); loadGallery(id); }).catch(err=>{ console.error(err); toast('사진 추가 실패 (규칙 확인)'); });
   },900); r.readAsDataURL(f); });
+document.getElementById('videoInput').addEventListener('change',e=>{ const f=e.target.files[0]; const id=pendingMediaMatch; e.target.value=''; if(!f||!id)return;
+  if(!FBstorage){ toast('Storage 설정이 필요합니다'); return; }
+  const ext=((f.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,''))||'mp4';
+  const path=`matches/${id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+  toast('동영상 업로드 중... ⏳');
+  const ref=FBstorage.ref(path);
+  ref.put(f).then(()=>ref.getDownloadURL()).then(url=>FB.collection('matches').doc(id).collection('media').add({type:'video',url,path,at:Date.now()}))
+    .then(()=>{ toast('동영상을 추가했습니다 🎬'); loadGallery(id); }).catch(err=>{ console.error(err); toast('동영상 업로드 실패 (Storage 설정 확인)'); }); });
 
 /* PWA: 서비스워커 등록 (오프라인 · 홈화면 설치) */
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
