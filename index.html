@@ -107,7 +107,7 @@
   .btn.danger:hover{background:rgba(119,255,15,.08);}
   .btn.ghost{background:transparent; color:var(--on-var);}
 
-  select,input[type=text],input[type=number]{
+  select,input[type=text],input[type=number],input[type=email],input[type=password],input[type=date]{
     width:100%; font-family:var(--f-body); font-size:13px; color:var(--on);
     background:var(--c-lowest); border:1px solid var(--alu); border-radius:var(--r);
     padding:10px 11px; outline:none; transition:.16s;
@@ -1629,8 +1629,16 @@ document.getElementById('videoInput').addEventListener('change',e=>{ const f=e.t
   ref.put(f).then(()=>ref.getDownloadURL()).then(url=>FB.collection('matches').doc(id).collection('media').add({type:'video',url,path,at:Date.now()}))
     .then(()=>{ toast('동영상을 추가했습니다 🎬'); loadGallery(id); }).catch(err=>{ console.error(err); toast('동영상 업로드 실패 (Storage 설정 확인)'); }); });
 
-/* PWA: 서비스워커 등록 (오프라인 · 홈화면 설치) */
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+/* PWA: 서비스워커 등록 + 자동 업데이트 */
+if('serviceWorker' in navigator){
+  let swRefreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(swRefreshing)return; swRefreshing=true; location.reload(); });
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+      reg.update(); setInterval(()=>reg.update(), 60*60*1000);
+    }).catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>

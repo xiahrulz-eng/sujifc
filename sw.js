@@ -1,5 +1,5 @@
 /* 수지FC 라인업 생성기 - 서비스워커 (오프라인 지원) */
-const CACHE = 'suji-fc-v19';
+const CACHE = 'suji-fc-v21';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './xlsx.full.min.js',
   './firebase-app-compat.js', './firebase-auth-compat.js', './firebase-firestore-compat.js', './firebase-storage-compat.js', './firebase-config.js',
   './logo-mark.png', './profile-none.png'];
@@ -27,7 +27,7 @@ self.addEventListener('fetch', e => {
   // 페이지 요청: 네트워크 우선(최신 유지), 오프라인이면 캐시
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then(res => {
+      fetch(req, { cache: 'reload' }).then(res => {   // 항상 최신 페이지 받기 (HTTP 캐시 우회)
         const clone = res.clone();
         caches.open(CACHE).then(c => c.put('./index.html', clone));
         return res;
