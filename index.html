@@ -428,6 +428,8 @@
           <div class="chips" id="skillChips"></div></div>
         <div class="fgroup"><span class="lab">참석</span>
           <div class="chips" id="attendChips"></div></div>
+        <div class="fgroup"><span class="lab">정렬</span>
+          <div class="chips" id="sortChips"></div></div>
       </div>
       <div class="tb-right">
         <button class="btn ghost sm" onclick="toggleAll(true)">전체 참석</button>
@@ -532,7 +534,7 @@ const DEFAULT_ROSTER=[
 
 let members=[], guests=[], editingId=null, tempPhoto=null, lastTeams=null;
 let matches=[], history=[], lastTeamSize=11;
-let filter={q:'',pos:'all',skill:'all',attend:'all'};
+let filter={q:'',pos:'all',skill:'all',attend:'all',sort:'default'};
 let hitMap={orange:[],green:[]};
 let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
@@ -597,12 +599,17 @@ function buildChips(){
     const c=document.createElement('button'); c.className='chip'+(filter.attend===val?' on':'');
     c.textContent=txt; c.onclick=()=>setFilter('attend',val); el.appendChild(c);
   });
+  const se=document.getElementById('sortChips'); se.innerHTML='';
+  [['default','기본'],['name','가나다순']].forEach(([val,txt])=>{
+    const c=document.createElement('button'); c.className='chip'+(filter.sort===val?' on':'');
+    c.textContent=txt; c.onclick=()=>setFilter('sort',val); se.appendChild(c);
+  });
 }
 function setFilter(key,val){ filter[key]=val; buildChips(); renderRoster(); }
 
 /* ============ 명단 렌더 ============ */
 function filtered(){
-  return members.filter(m=>{
+  const arr=members.filter(m=>{
     if(filter.q && !m.name.includes(filter.q)) return false;
     if(filter.pos!=='all' && m.position!==filter.pos) return false;
     if(filter.skill!=='all' && m.skill!==filter.skill) return false;
@@ -610,6 +617,8 @@ function filtered(){
     if(filter.attend==='no' && m.attend) return false;
     return true;
   });
+  if(filter.sort==='name') arr.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  return arr;
 }
 function renderRoster(){
   const box=document.getElementById('roster'); box.innerHTML='';

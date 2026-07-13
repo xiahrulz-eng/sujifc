@@ -1,5 +1,5 @@
 /* 수지FC 라인업 생성기 - 서비스워커 (오프라인 지원) */
-const CACHE = 'suji-fc-v10';
+const CACHE = 'suji-fc-v11';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './xlsx.full.min.js'];
 
 self.addEventListener('install', e => {
