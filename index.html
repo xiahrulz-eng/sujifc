@@ -481,16 +481,23 @@
       <div class="card collapsible" id="card-setting" style="margin-bottom:16px;">
         <h2 class="sec toggle" onclick="toggleCard('card-setting')">⚙️ 팀 생성 설정 <span class="chev">▾</span></h2>
         <div class="card-body">
-        <label class="fld">팀당 인원 (포메이션)</label>
-        <select id="teamSize">
-          <option value="5">5명 · 2-1-1</option>
-          <option value="6">6명 · 2-2-1</option>
-          <option value="7">7명 · 3-2-1</option>
-          <option value="8">8명 · 3-2-2</option>
-          <option value="9">9명 · 3-3-2</option>
-          <option value="10">10명 · 4-3-2</option>
-          <option value="11" selected>11명 · 4-3-3</option>
-        </select>
+        <label class="fld">포메이션 (팀별 설정, 11 vs 11)</label>
+        <div class="rowg">
+          <div><label class="fld" style="margin-top:0" id="fmLabelO">🟠 오렌지</label>
+            <select id="formationO">
+              <option value="4-3-3" selected>4-3-3</option>
+              <option value="4-2-3-1">4-2-3-1</option>
+              <option value="4-4-2">4-4-2</option>
+              <option value="3-4-3">3-4-3</option>
+            </select></div>
+          <div><label class="fld" style="margin-top:0" id="fmLabelG">🟢 그린</label>
+            <select id="formationG">
+              <option value="4-3-3" selected>4-3-3</option>
+              <option value="4-2-3-1">4-2-3-1</option>
+              <option value="4-4-2">4-4-2</option>
+              <option value="3-4-3">3-4-3</option>
+            </select></div>
+        </div>
         <label class="fld">생성 방식</label>
         <div class="method" id="method">
           <label class="opt sel"><input type="radio" name="mtd" value="random" checked>
@@ -532,9 +539,10 @@
           <div class="stat"><div class="n" id="s-need">0</div><div class="l">필요 인원</div></div>
         </div>
         <button class="btn ghost sm" style="width:100%; margin-top:12px;" onclick="showView('roster')">명단 관리로 이동 →</button>
-        <button class="btn primary lg" style="margin-top:10px;" onclick="generate()">🎲 팀 생성하기</button>
         </div>
       </div>
+
+      <button class="btn primary lg" style="width:100%; margin-top:2px;" onclick="generate()">🎲 팀 생성하기</button>
     </div>
 
     <div class="card">
@@ -713,16 +721,37 @@ const DEFAULT_PROFILE_SRC='profile-none.png';
 const POS_LIST=['GK','DF','MF','FW'];
 const SKILL_LIST=['상','중','하'];
 const SKILL_SCORE={'상':3,'중':2,'하':1};
-const FORMATIONS={5:{GK:1,DF:2,MF:1,FW:1},6:{GK:1,DF:2,MF:2,FW:1},7:{GK:1,DF:3,MF:2,FW:1},
-  8:{GK:1,DF:3,MF:2,FW:2},9:{GK:1,DF:3,MF:3,FW:2},10:{GK:1,DF:4,MF:3,FW:2},11:{GK:1,DF:4,MF:3,FW:3}};
-// 포지션 슬롯 세부 이름 (좌→우, L=좌 R=우)
-const SLOT_LABELS={
-  GK:{1:['GK']},
-  DF:{1:['CB'],2:['LCB','RCB'],3:['LB','CB','RB'],4:['LB','LCB','RCB','RB']},
-  MF:{1:['CM'],2:['LCM','RCM'],3:['LCM','CM','RCM']},
-  FW:{1:['ST'],2:['LW','RW'],3:['LW','ST','RW']}
+/* 포메이션: 아래(GK)→위(FW) 순서의 행 배열. 각 슬롯=[표시라벨, 밸런스카테고리] */
+const FORMATIONS={
+  '4-3-3':[
+    [['GK','GK']],
+    [['LB','DF'],['LCB','DF'],['RCB','DF'],['RB','DF']],
+    [['LCM','MF'],['CM','MF'],['RCM','MF']],
+    [['LW','FW'],['ST','FW'],['RW','FW']]
+  ],
+  '4-2-3-1':[
+    [['GK','GK']],
+    [['LB','DF'],['LCB','DF'],['RCB','DF'],['RB','DF']],
+    [['CDM','MF'],['CDM','MF']],
+    [['LM','MF'],['CAM','MF'],['RM','MF']],
+    [['ST','FW']]
+  ],
+  '4-4-2':[
+    [['GK','GK']],
+    [['LB','DF'],['LCB','DF'],['RCB','DF'],['RB','DF']],
+    [['LM','MF'],['LCM','MF'],['RCM','MF'],['RM','MF']],
+    [['LF','FW'],['RF','FW']]
+  ],
+  '3-4-3':[
+    [['GK','GK']],
+    [['LCB','DF'],['CB','DF'],['RCB','DF']],
+    [['LM','MF'],['LCM','MF'],['RCM','MF'],['RM','MF']],
+    [['LS','FW'],['ST','FW'],['RS','FW']]
+  ]
 };
-function slotLabel(pos,count,idx){ const a=(SLOT_LABELS[pos]||{})[count]; return (a&&a[idx])?a[idx]:pos+(idx+1); }
+const FORMATION_LIST=['4-3-3','4-2-3-1','4-4-2','3-4-3'];
+function formationCounts(fm){ const c={GK:0,DF:0,MF:0,FW:0}; fm.forEach(r=>r.forEach(s=>c[s[1]]++)); return c; }
+function fmOf(team){ return FORMATIONS[team&&team.formation]||FORMATIONS['4-3-3']; }
 /* ▼▼▼ 공통 기본 명단 — 이 부분만 실제 팀 명단으로 바꾸면 됩니다 [이름, 나이(null=미입력), 포지션(GK/DF/MF/FW), 실력(상/중/하)] ▼▼▼ */
 const DEFAULT_ROSTER=[
   ['배주혁',null,'MF','중'], ['김노아',null,'MF','중'], ['이상훈',null,'MF','중'], ['이성엽',null,'DF','중'],
@@ -751,7 +780,12 @@ function canEdit(){ return isAdmin; }
 function canView(){ return role==='admin'||role==='member'; }
 function loadTeamConfig(){ const r=localStorage.getItem('suziFC_teams'); if(r){try{const d=JSON.parse(r); if(d&&d.orange&&d.green)teamConfig=d;}catch(e){}} }
 function subscribeTeamConfig(){ teamCfgUnsub=FB.collection('settings').doc('teams').onSnapshot(doc=>{ if(doc.exists){ const d=doc.data(); if(d&&d.orange&&d.green){ teamConfig=d; localStorage.setItem('suziFC_teams',JSON.stringify(teamConfig)); applyTeamConfig(); } } }, e=>console.error(e)); }
-function applyTeamConfig(){ if(lastTeams){ lastTeams.orange.name=teamConfig.orange.name; lastTeams.orange.color=teamConfig.orange.color; lastTeams.green.name=teamConfig.green.name; lastTeams.green.color=teamConfig.green.color; renderResult(); } }
+function applyTeamConfig(){
+  const lo=document.getElementById('fmLabelO'), lg=document.getElementById('fmLabelG');
+  if(lo) lo.innerHTML=`<span style="color:${teamConfig.orange.color}">●</span> ${teamConfig.orange.name}`;
+  if(lg) lg.innerHTML=`<span style="color:${teamConfig.green.color}">●</span> ${teamConfig.green.name}`;
+  if(lastTeams){ lastTeams.orange.name=teamConfig.orange.name; lastTeams.orange.color=teamConfig.orange.color; lastTeams.green.name=teamConfig.green.name; lastTeams.green.color=teamConfig.green.color; renderResult(); }
+}
 function openTeamCfg(){ if(!requireAdmin())return;
   document.getElementById('t1name').value=teamConfig.orange.name; document.getElementById('t1color').value=teamConfig.orange.color;
   document.getElementById('t2name').value=teamConfig.green.name; document.getElementById('t2color').value=teamConfig.green.color;
@@ -1104,7 +1138,7 @@ function renderRoster(){
 function renderSummary(){
   const memAttend=members.filter(m=>m.attend).length;
   const total=memAttend+guests.length;
-  const N=+document.getElementById('teamSize').value, need=N*2;
+  const need=22;
   document.getElementById('s-total').textContent=memAttend;
   document.getElementById('s-guest').textContent=guests.length;
   document.getElementById('s-attend').textContent=total;
@@ -1240,32 +1274,33 @@ document.getElementById('xlsInput').addEventListener('change',e=>{
 function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 function sc(p){ return SKILL_SCORE[p.skill]; }
 function generate(){
-  const N=+document.getElementById('teamSize').value;
+  const fmKeyO=(document.getElementById('formationO')||{}).value||'4-3-3';
+  const fmKeyG=(document.getElementById('formationG')||{}).value||'4-3-3';
+  const fmO=FORMATIONS[fmKeyO]||FORMATIONS['4-3-3'], fmG=FORMATIONS[fmKeyG]||FORMATIONS['4-3-3'];
+  const N=11, need=22;
   const method=document.querySelector('input[name=mtd]:checked').value;
-  // 원본을 건드리지 않도록 복제 (라인업 편집·포지션 변경은 이 복제본에만 적용)
-  const pool=members.filter(m=>m.attend).concat(guests).map(p=>({...p})), need=N*2;
+  const pool=members.filter(m=>m.attend).concat(guests).map(p=>({...p}));
   if(pool.length<need){ toast(`참석 인원 부족: ${need}명 필요 (현재 ${pool.length}명)`); return; }
   lastTeamSize=N;
-  const F=FORMATIONS[N]; let A=[],B=[];
+  const FO=formationCounts(fmO), FG=formationCounts(fmG); let A=[],B=[];
   if(method==='random'){ const c=shuffle(pool).slice(0,need); A=c.slice(0,N); B=c.slice(N,need); }
-  else if(method==='position'){ ({A,B}=byPosition(pool,F,N)); }
+  else if(method==='position'){ ({A,B}=byPosition(pool,FO,FG,N)); }
   else if(method==='skill'){ ({A,B}=bySkill(pool,N)); }
-  else { ({A,B}=byBoth(pool,F,N)); }
-  // 선발 외 참석자 → 후보로 양팀에 배분
+  else { ({A,B}=byBoth(pool,FO,FG,N)); }
   const used=new Set([...A,...B]);
   const rest=shuffle(pool.filter(p=>!used.has(p)));
   const benchA=[],benchB=[]; rest.forEach((p,i)=>(i%2?benchB:benchA).push(p));
-  lastTeams={ orange:{key:'orange',name:teamConfig.orange.name,color:teamConfig.orange.color,rows:buildLineup(A,F),bench:benchA},
-    green:{key:'green',name:teamConfig.green.name,color:teamConfig.green.color,rows:buildLineup(B,F),bench:benchB} };
+  lastTeams={ orange:{key:'orange',name:teamConfig.orange.name,color:teamConfig.orange.color,formation:fmKeyO,rows:buildLineup(A,fmO),bench:benchA},
+    green:{key:'green',name:teamConfig.green.name,color:teamConfig.green.color,formation:fmKeyG,rows:buildLineup(B,fmG),bench:benchB} };
   pushHistory();
-  renderResult(); toast(rest.length?`팀 생성 완료! ⚽ (후보 ${rest.length}명)`:'팀 생성 완료! ⚽');
+  renderResult(); toast(rest.length?`팀 생성 완료! ⚽ (${fmKeyO} vs ${fmKeyG}, 후보 ${rest.length}명)`:`팀 생성 완료! ⚽ (${fmKeyO} vs ${fmKeyG})`);
 }
-function byPosition(pool,F,N){
+function byPosition(pool,FO,FG,N){
   const bp={GK:[],DF:[],MF:[],FW:[]}; shuffle(pool).forEach(p=>bp[p.position].push(p));
   const A=[],B=[],left=[];
-  POS_LIST.forEach(pos=>{ const need=F[pos],arr=bp[pos];
-    for(let i=0;i<need;i++)if(arr.length)A.push(arr.shift());
-    for(let i=0;i<need;i++)if(arr.length)B.push(arr.shift()); left.push(...arr); });
+  POS_LIST.forEach(pos=>{ const arr=bp[pos];
+    for(let i=0;i<FO[pos];i++)if(arr.length)A.push(arr.shift());
+    for(let i=0;i<FG[pos];i++)if(arr.length)B.push(arr.shift()); left.push(...arr); });
   const l=shuffle(left); while(A.length<N&&l.length)A.push(l.shift()); while(B.length<N&&l.length)B.push(l.shift());
   return {A,B};
 }
@@ -1276,40 +1311,45 @@ function bySkill(pool,N){
     if(sa<=sb){A.push(p);sa+=sc(p);}else{B.push(p);sb+=sc(p);} });
   return {A,B};
 }
-function byBoth(pool,F,N){
+function byBoth(pool,FO,FG,N){
   const bp={GK:[],DF:[],MF:[],FW:[]}; shuffle(pool).forEach(p=>bp[p.position].push(p));
   const A=[],B=[],left=[]; let sa=0,sb=0;
-  POS_LIST.forEach(pos=>{ const arr=bp[pos].sort((a,b)=>sc(b)-sc(a)); const take=arr.splice(0,F[pos]*2);
-    take.forEach(p=>{ if(A.length>=N){B.push(p);sb+=sc(p);return;} if(B.length>=N){A.push(p);sa+=sc(p);return;}
-      if(sa<=sb){A.push(p);sa+=sc(p);}else{B.push(p);sb+=sc(p);} }); left.push(...arr); });
+  POS_LIST.forEach(pos=>{ const arr=bp[pos].sort((a,b)=>sc(b)-sc(a)); const take=arr.splice(0,FO[pos]+FG[pos]);
+    let ca=0,cb=0;
+    take.forEach(p=>{ const canA=ca<FO[pos], canB=cb<FG[pos];
+      const toA = (canA&&canB) ? (sa<=sb) : canA;
+      if(toA){A.push(p);sa+=sc(p);ca++;} else {B.push(p);sb+=sc(p);cb++;} });
+    left.push(...arr); });
   const l=shuffle(left);
   while(A.length<N&&l.length){const p=l.shift(); if(sa<=sb){A.push(p);sa+=sc(p);}else{B.push(p);sb+=sc(p);}}
   while(B.length<N&&l.length)B.push(l.shift());
   return {A,B};
 }
-function buildLineup(players,F){
-  const rows={GK:[],DF:[],MF:[],FW:[]}, used=new Set();
-  POS_LIST.forEach(pos=>{ for(let i=0;i<F[pos];i++){
-    const idx=players.findIndex((p,j)=>!used.has(j)&&p.position===pos);
-    if(idx>=0){used.add(idx);rows[pos].push(players[idx]);}else rows[pos].push(null); } });
+function buildLineup(players,fm){
+  const used=new Set();
+  // 1차: 슬롯 카테고리와 선수 포지션 매칭
+  const rows=fm.map(row=>row.map(slot=>{
+    const idx=players.findIndex((p,j)=>!used.has(j)&&p.position===slot[1]);
+    if(idx>=0){ used.add(idx); return players[idx]; } return null;
+  }));
+  // 2차: 남은 선수로 빈 슬롯 채우기
   const left=players.filter((p,j)=>!used.has(j)); let li=0;
-  POS_LIST.forEach(pos=>{ rows[pos]=rows[pos].map(p=>p||left[li++]||null); });
-  return rows;
+  return rows.map(row=>row.map(p=>p||left[li++]||null));
 }
 
 /* ============ 캔버스 ============ */
-const CW=560,CH=760;
-function drawPitch(ctx,accent){
-  const g=ctx.createLinearGradient(0,0,0,CH);
+const CW=560;
+function drawPitch(ctx,accent,H){
+  const g=ctx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,'#0b1a10');g.addColorStop(.5,'#123a20');g.addColorStop(1,'#0b1a10');
-  ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
-  for(let i=0;i<10;i++)if(i%2){ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(0,i*CH/10,CW,CH/10);}
+  ctx.fillStyle=g; ctx.fillRect(0,0,CW,H);
+  for(let i=0;i<10;i++)if(i%2){ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(0,i*H/10,CW,H/10);}
   ctx.strokeStyle='rgba(255,255,255,.32)';ctx.lineWidth=2; const m=18;
-  ctx.strokeRect(m,m,CW-2*m,CH-2*m);
-  ctx.beginPath();ctx.moveTo(m,CH/2);ctx.lineTo(CW-m,CH/2);ctx.stroke();
-  ctx.beginPath();ctx.arc(CW/2,CH/2,60,0,Math.PI*2);ctx.stroke();
-  ctx.beginPath();ctx.arc(CW/2,CH/2,3,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.32)';ctx.fill();
-  const bw=190,bh=90; ctx.strokeRect(CW/2-bw/2,m,bw,bh); ctx.strokeRect(CW/2-bw/2,CH-m-bh,bw,bh);
+  ctx.strokeRect(m,m,CW-2*m,H-2*m);
+  ctx.beginPath();ctx.moveTo(m,H/2);ctx.lineTo(CW-m,H/2);ctx.stroke();
+  ctx.beginPath();ctx.arc(CW/2,H/2,60,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.arc(CW/2,H/2,3,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.32)';ctx.fill();
+  const bw=190,bh=90; ctx.strokeRect(CW/2-bw/2,m,bw,bh); ctx.strokeRect(CW/2-bw/2,H-m-bh,bw,bh);
   ctx.fillStyle=accent; ctx.fillRect(0,0,CW,6);
 }
 function roundRect(ctx,x,y,w,h,r){ ctx.beginPath();ctx.moveTo(x+r,y);
@@ -1321,9 +1361,8 @@ function drawPosBadge(ctx,x,y,text,color){
   ctx.fillStyle='#0c0e11'; ctx.fillText(text,x,y+1);
 }
 function drawCard(ctx,x,y,p,accent){
-  const hasPhoto=!!(p&&p.photo);
-  const box=hasPhoto?101:76, half=box/2;   // 사진 1.2배 / 기본 0.9배
-  const img=hasPhoto?getImg(p.photo):getImg(DEFAULT_PROFILE_SRC);
+  const box=101, half=box/2;   // 기본·사진 프로필 크기 통일
+  const img=(p&&p.photo)?getImg(p.photo):getImg(DEFAULT_PROFILE_SRC);
   if(img){ const s=Math.min(box/img.naturalWidth,box/img.naturalHeight),w=img.naturalWidth*s,h=img.naturalHeight*s;
     ctx.drawImage(img,x-w/2,y-h/2,w,h); }
   else if(p){ ctx.fillStyle='#fff';ctx.font='bold 24px "Space Grotesk",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
@@ -1339,30 +1378,34 @@ function drawCard(ctx,x,y,p,accent){
 const FOOTER_H=50;
 function drawTeam(canvas,team,key){
   const bench=team.bench||[];
-  const H=CH+(bench.length?FOOTER_H:0);
-  const ctx=canvas.getContext('2d'); canvas.width=CW;canvas.height=H; drawPitch(ctx,team.color);
+  const fm=fmOf(team), rows=team.rows, nRows=rows.length;
+  const rowGap=158, top=96, PITCH=top+nRows*rowGap+20;   // 행 수에 맞춰 세로 길이 자동
+  const H=PITCH+(bench.length?FOOTER_H:0);
+  const ctx=canvas.getContext('2d'); canvas.width=CW;canvas.height=H; drawPitch(ctx,team.color,PITCH);
   ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 24px "Space Grotesk",sans-serif';ctx.fillText('수지FC',CW/2,36);
   ctx.fillStyle=team.color;ctx.font='bold 16px "Malgun Gothic",sans-serif';ctx.fillText(team.name,CW/2,58);
-  const order=['FW','MF','DF','GK'].filter(pos=>team.rows[pos].length);
-  const top=100,bottom=CH-24,gap=(bottom-top)/order.length;
   if(key) hitMap[key]=[];
-  order.forEach((pos,ri)=>{ const y=top+gap*ri+gap/2,arr=team.rows[pos];
-    arr.forEach((p,ci)=>{ const x=CW*(ci+1)/(arr.length+1);
+  for(let r=0;r<nRows;r++){
+    const fi=nRows-1-r;                        // 위 = 공격(마지막 행), 아래 = GK(0행)
+    const y=top+rowGap*r+rowGap/2, rowArr=rows[fi], fmRow=fm[fi];
+    rowArr.forEach((p,ci)=>{ const x=CW*(ci+1)/(rowArr.length+1);
       drawCard(ctx,x,y,p,team.color);
-      drawPosBadge(ctx,x,y-((p&&p.photo)?60:52),slotLabel(pos,arr.length,ci),POS_COLORS[pos]);
-      if(key) hitMap[key].push({x,y,r:48,ref:{team:key,type:'starter',pos,idx:ci}});
-      if(key&&hoverRef&&hoverRef.team===key&&hoverRef.type==='starter'&&hoverRef.pos===pos&&hoverRef.idx===ci){
+      const slot=fmRow[ci]||['',''];
+      drawPosBadge(ctx,x,y-60,slot[0],POS_COLORS[slot[1]]||'#888');
+      if(key) hitMap[key].push({x,y,r:48,ref:{team:key,type:'starter',row:fi,idx:ci}});
+      if(key&&hoverRef&&hoverRef.team===key&&hoverRef.type==='starter'&&hoverRef.row===fi&&hoverRef.idx===ci){
         ctx.beginPath();ctx.arc(x,y,50,0,Math.PI*2);ctx.lineWidth=4;ctx.strokeStyle='#fff';
         ctx.setLineDash([7,5]);ctx.stroke();ctx.setLineDash([]);
       }
-    }); });
+    });
+  }
   if(bench.length){
-    ctx.fillStyle='#0c0e11';ctx.fillRect(0,CH,CW,FOOTER_H);
-    ctx.fillStyle=team.color;ctx.fillRect(0,CH,4,FOOTER_H);
+    ctx.fillStyle='#0c0e11';ctx.fillRect(0,PITCH,CW,FOOTER_H);
+    ctx.fillStyle=team.color;ctx.fillRect(0,PITCH,4,FOOTER_H);
     ctx.textAlign='left';ctx.fillStyle=team.color;ctx.font='bold 11px "Manrope",sans-serif';
-    ctx.fillText('후보 '+bench.length+'명',16,CH+19);
+    ctx.fillText('후보 '+bench.length+'명',16,PITCH+19);
     ctx.fillStyle='#e2e2e6';ctx.font='14px "Malgun Gothic",sans-serif';
-    ctx.fillText(bench.map(p=>p.name).join('   ·   '),16,CH+38);
+    ctx.fillText(bench.map(p=>p.name).join('   ·   '),16,PITCH+38);
   }
 }
 const imgCache=new Map();
@@ -1407,7 +1450,7 @@ function renderResult(){
   hint.innerHTML='💡 선수를 <b>드래그</b>해 다른 선수 위에 놓으면 자리가 바뀝니다. <b>클릭</b>하면 목록에서 교체할 수도 있어요 (후보·다른 팀 포함).';
   box.appendChild(hint);
   const srcs=[DEFAULT_PROFILE_SRC]; ['orange','green'].forEach(k=>{ const t=lastTeams[k];
-    POS_LIST.forEach(pos=>t.rows[pos].forEach(p=>{if(p&&p.photo)srcs.push(p.photo);}));
+    t.rows.forEach(row=>row.forEach(p=>{if(p&&p.photo)srcs.push(p.photo);}));
     (t.bench||[]).forEach(p=>{if(p&&p.photo)srcs.push(p.photo);}); });
   ensureImages(srcs,()=>{ drawTeam(document.getElementById('cv_orange'),lastTeams.orange,'orange'); drawTeam(document.getElementById('cv_green'),lastTeams.green,'green'); });
 }
@@ -1455,12 +1498,12 @@ function onDragEnd(e){ if(!drag)return; const d=drag; drag=null;
     setPlayer(d.ref,pb); setPlayer(t,pa); renderResult(); toast('교체 완료 🔄'); return; }
   redrawTeams();
 }
-function refKey(r){ return `${r.team}-${r.type}-${r.pos||''}-${r.idx}`; }
-function getPlayer(ref){ return ref.type==='starter'?lastTeams[ref.team].rows[ref.pos][ref.idx]:lastTeams[ref.team].bench[ref.idx]; }
-function setPlayer(ref,p){ if(ref.type==='starter')lastTeams[ref.team].rows[ref.pos][ref.idx]=p; else lastTeams[ref.team].bench[ref.idx]=p; }
+function refKey(r){ return `${r.team}-${r.type}-${r.row!==undefined?r.row:''}-${r.idx}`; }
+function getPlayer(ref){ return ref.type==='starter'?lastTeams[ref.team].rows[ref.row][ref.idx]:lastTeams[ref.team].bench[ref.idx]; }
+function setPlayer(ref,p){ if(ref.type==='starter')lastTeams[ref.team].rows[ref.row][ref.idx]=p; else lastTeams[ref.team].bench[ref.idx]=p; }
 function onPlayerClick(ref){
   const p=getPlayer(ref); if(!p)return;
-  const loc=ref.type==='bench'?'후보':slotLabel(ref.pos,lastTeams[ref.team].rows[ref.pos].length,ref.idx);
+  const loc=ref.type==='bench'?'후보':(fmOf(lastTeams[ref.team])[ref.row][ref.idx][0]);
   const ava=p.photo?` style="background-image:url('${p.photo}')"`:'';
   let html=`<h3>선수 편집</h3>
     <div class="edit-head">
@@ -1479,14 +1522,15 @@ function onPlayerClick(ref){
     <div class="modal-sub">🔄 다른 선수와 교체 / 위치 이동</div>
     <div class="swap-list">`;
   ['orange','green'].forEach(k=>{
-    const t=lastTeams[k];
+    const t=lastTeams[k], fm=fmOf(t);
     html+=`<div class="swap-group"><div class="swap-h" style="color:${t.color}">${t.name}</div>`;
-    ['FW','MF','DF','GK'].forEach(pos=>{ t.rows[pos].forEach((pl,idx)=>{
-      const r2={team:k,type:'starter',pos,idx}; if(refKey(r2)===refKey(ref))return;
+    for(let row=t.rows.length-1; row>=0; row--){ t.rows[row].forEach((pl,idx)=>{
+      const r2={team:k,type:'starter',row,idx}; if(refKey(r2)===refKey(ref))return;
+      const slot=(fm[row]&&fm[row][idx])||['','MF'];
       html+=`<button class="swap-item" onclick='doSwapFromRef(${JSON.stringify(r2)})'>
-        <span class="si-pos" style="background:${POS_COLORS[pos]}">${slotLabel(pos,t.rows[pos].length,idx)}</span>
+        <span class="si-pos" style="background:${POS_COLORS[slot[1]]}">${slot[0]}</span>
         <span>${pl?pl.name:'(빈자리)'}</span></button>`;
-    }); });
+    }); }
     (t.bench||[]).forEach((pl,idx)=>{ const r2={team:k,type:'bench',idx}; if(refKey(r2)===refKey(ref))return;
       html+=`<button class="swap-item" onclick='doSwapFromRef(${JSON.stringify(r2)})'>
         <span class="si-pos" style="background:var(--c-high);color:var(--on-var)">후보</span>
@@ -1501,18 +1545,20 @@ function onPlayerClick(ref){
 function doSwapFromRef(r2){ const a=window._editRef; const pa=getPlayer(a),pb=getPlayer(r2);
   setPlayer(a,pb); setPlayer(r2,pa); closeEditLineup(); renderResult(); toast('교체 완료 🔄'); }
 function closeEditLineup(){ document.getElementById('editOverlay').classList.remove('on'); }
-// (1) 이번 라인업에서만 포지션 변경
-function changeLineupPos(pos){
+// (1) 이번 라인업에서만 포지션(카테고리) 변경 → 해당 포지션 슬롯으로 이동
+function changeLineupPos(cat){
   const ref=window._editRef, p=getPlayer(ref); if(!p) return;
-  p.position=pos;
-  if(ref.type==='starter' && ref.pos!==pos){
-    const team=lastTeams[ref.team];
-    let ti=team.rows[pos].findIndex(x=>!x); if(ti<0) ti=team.rows[pos].length-1;
-    const tRef={team:ref.team,type:'starter',pos,idx:ti}, other=getPlayer(tRef);
-    setPlayer(tRef,p); setPlayer(ref,other);
-    closeEditLineup(); renderResult(); toast(`${p.name} → ${pos} 위치로 이동`); return;
+  p.position=cat;
+  if(ref.type==='starter'){
+    const team=lastTeams[ref.team], fm=fmOf(team);
+    const curCat=(fm[ref.row]&&fm[ref.row][ref.idx])?fm[ref.row][ref.idx][1]:null;
+    if(curCat===cat){ closeEditLineup(); renderResult(); toast(`이미 ${cat} 위치입니다`); return; }
+    let target=null;
+    for(let r=0;r<fm.length&&!target;r++) for(let i=0;i<fm[r].length;i++){ if(fm[r][i][1]===cat){ target={team:ref.team,type:'starter',row:r,idx:i}; break; } }
+    if(target){ const other=getPlayer(target); setPlayer(target,p); setPlayer(ref,other); }
+    closeEditLineup(); renderResult(); toast(`${p.name} → ${cat} 위치로 이동`); return;
   }
-  closeEditLineup(); renderResult(); toast(`${p.name} 포지션 ${pos}(으)로 변경`);
+  closeEditLineup(); renderResult(); toast(`${p.name} 포지션 ${cat}(으)로 변경`);
 }
 // (2) 라인업에서 제외 (급 결석 등) — 원본 명단에는 영향 없음
 function excludeFromLineup(){
@@ -1540,17 +1586,26 @@ function hydrateP(p){ if(!p) return null; const m=members.find(x=>x.id===p.id); 
 function snapshotTeams(){
   const s={teamSize:lastTeamSize, at:Date.now()};
   ['orange','green'].forEach(k=>{ const t=lastTeams[k];
-    s[k]={name:t.name,color:t.color,bench:(t.bench||[]).map(stripP),rows:{}};
-    POS_LIST.forEach(pos=>s[k].rows[pos]=(t.rows[pos]||[]).map(stripP));
+    s[k]={name:t.name,color:t.color,formation:t.formation||'4-3-3',bench:(t.bench||[]).map(stripP),
+      rows:t.rows.map(row=>row.map(stripP))};
   });
   return s;
 }
 function teamsFromSnap(s){
   const out={};
   ['orange','green'].forEach(k=>{ const t=s[k];
-    out[k]={key:k,name:t.name,color:t.color,bench:(t.bench||[]).map(hydrateP),rows:{}};
-    POS_LIST.forEach(pos=>out[k].rows[pos]=(t.rows[pos]||[]).map(hydrateP));
+    // 구버전(포지션 객체) 스냅샷 호환
+    let rows;
+    if(Array.isArray(t.rows)) rows=t.rows.map(row=>row.map(hydrateP));
+    else { const fm=FORMATIONS[t.formation]||FORMATIONS['4-3-3']; const flat=[]; ['GK','DF','MF','FW'].forEach(pos=>(t.rows[pos]||[]).forEach(p=>flat.push(p))); let i=0; rows=fm.map(row=>row.map(()=>hydrateP(flat[i++]||null))); }
+    out[k]={key:k,name:t.name,color:t.color,formation:t.formation||'4-3-3',bench:(t.bench||[]).map(hydrateP),rows};
   });
+  return out;
+}
+// 스냅샷(신/구 포맷) → 슬롯 목록 {p,label,cat}
+function snapSlots(t){ const out=[], rows=t.rows;
+  if(Array.isArray(rows)){ const fm=FORMATIONS[t.formation]; rows.forEach((row,ri)=>row.forEach((p,ci)=>{ const slot=(fm&&fm[ri]&&fm[ri][ci])||['','MF']; out.push({p,label:slot[0],cat:slot[1]}); })); }
+  else ['GK','DF','MF','FW'].forEach(pos=>(rows[pos]||[]).forEach(p=>out.push({p,label:pos,cat:pos})));
   return out;
 }
 function saveHistory(){ localStorage.setItem('suziFC_history',JSON.stringify(history)); }
@@ -1558,7 +1613,7 @@ function loadHistory(){ const r=localStorage.getItem('suziFC_history'); if(r){tr
 function pushHistory(){ history.unshift(snapshotTeams()); history=history.slice(0,12); saveHistory(); }
 function fmtTime(ts){ const d=new Date(ts); const p=n=>('0'+n).slice(-2);
   return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
-function teamNames(snap,k){ const t=snap[k]; const names=[]; POS_LIST.forEach(pos=>(t.rows[pos]||[]).forEach(p=>{if(p)names.push(p.name);})); return names; }
+function teamNames(snap,k){ const names=[]; snapSlots(snap[k]).forEach(sl=>{if(sl.p)names.push(sl.p.name);}); return names; }
 function openHistory(){
   const body=document.getElementById('histBody');
   let html=`<h3>🕘 라인업 히스토리</h3>`;
@@ -1594,20 +1649,20 @@ function scoreDisp(v){ return (v===''||v==null)?'-':v; }
 function crown(p,momId){ return (p&&momId&&p.id===momId)?' 👑':''; }
 function rosterHtml(s,k,momId){
   const t=s[k]; let html=`<div class="mr-col"><h4 style="color:${t.color}">${t.name}</h4>`;
-  ['GK','DF','MF','FW'].forEach(pos=>{ (t.rows[pos]||[]).forEach((p,i)=>{ if(p)
-    html+=`<div class="mr-p"><span class="mr-pos" style="background:${POS_COLORS[pos]}">${slotLabel(pos,t.rows[pos].length,i)}</span>${p.name}${crown(p,momId)}</div>`; }); });
+  snapSlots(t).forEach(sl=>{ if(sl.p)
+    html+=`<div class="mr-p"><span class="mr-pos" style="background:${POS_COLORS[sl.cat]||'#888'}">${sl.label}</span>${sl.p.name}${crown(sl.p,momId)}</div>`; });
   const bench=t.bench||[]; if(bench.length) html+=`<div class="mr-bench">후보 · ${bench.map(p=>p.name+crown(p,momId)).join(', ')}</div>`;
   return html+'</div>';
 }
 function momOptions(s,sel){ let o='<option value="">— 선택 안 함 —</option>';
   ['orange','green'].forEach(k=>{ const t=s[k];
-    ['GK','DF','MF','FW'].forEach(pos=>(t.rows[pos]||[]).forEach(p=>{ if(p) o+=`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.name} · ${t.name}</option>`; }));
+    snapSlots(t).forEach(sl=>{ if(sl.p) o+=`<option value="${sl.p.id}" ${sl.p.id===sel?'selected':''}>${sl.p.name} · ${t.name}</option>`; });
     (t.bench||[]).forEach(p=>{ o+=`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.name} · 후보</option>`; });
   });
   return o;
 }
 function updMatchMom(id,pid){ if(!requireAdmin())return; const m=matches.find(x=>x.id===id); if(!m)return;
-  let name=''; if(pid){ const s=m.snap; ['orange','green'].forEach(k=>{ POS_LIST.forEach(pos=>(s[k].rows[pos]||[]).forEach(p=>{ if(p&&p.id===pid)name=p.name; })); (s[k].bench||[]).forEach(p=>{ if(p.id===pid)name=p.name; }); }); }
+  let name=''; if(pid){ const s=m.snap; ['orange','green'].forEach(k=>{ snapSlots(s[k]).forEach(sl=>{ if(sl.p&&sl.p.id===pid)name=sl.p.name; }); (s[k].bench||[]).forEach(p=>{ if(p.id===pid)name=p.name; }); }); }
   m.momId=pid; m.momName=name; saveMatches(); fbSaveMatch(m); renderMatchDetail(id); }
 function renderMatches(){
   const box=document.getElementById('matchList');
@@ -1740,7 +1795,6 @@ let toastT;
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2000); }
 document.querySelectorAll('input[name=mtd]').forEach(r=>r.addEventListener('change',()=>{
   document.querySelectorAll('.method .opt').forEach(o=>o.classList.remove('sel')); r.closest('.opt').classList.add('sel'); }));
-document.getElementById('teamSize').addEventListener('change',renderSummary);
 document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeModal(); });
 document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target.id==='editOverlay')closeEditLineup(); });
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
@@ -1759,7 +1813,7 @@ document.addEventListener('pointercancel',onDragEnd);
 
 /* 초기화 */
 load(); loadGuests(); loadMatches(); loadHistory(); loadAttend(); loadTeamConfig(); applyAttendToMembers();
-buildChips(); renderRoster(); renderGuests(); renderSummary();
+buildChips(); renderRoster(); renderGuests(); renderSummary(); applyTeamConfig();
 document.getElementById('authGate').style.display='flex';  // 인증 확인 전엔 로그인 화면
 renderAuthMode();
 initFirebase(); updateAdminUI();
