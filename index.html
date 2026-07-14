@@ -1855,7 +1855,7 @@ function renderStats(q){
     const ava=m.photo?` style="background-image:url('${m.photo}')"`:'';
     html+=`<tr><td class="name-col"><span class="p-name">
       <span class="bc-ava"${ava}>${m.photo?'':m.name[0]}</span>${m.name}
-      <span class="badge pos" style="background:${POS_COLORS[grp(m.position)]}">${m.position}${m.position2?' / '+m.position2:''}</span></span></td>`;
+      <span class="badge pos" style="background:${POS_COLORS[grp(m.position)]}">${m.position}</span>${m.position2?`<span class="badge subpos">${m.position2}</span>`:''}</span></td>`;
     STAT_COLS.forEach(c=>{ html+=`<td><input class="s-in" type="number" min="0" value="${st[c[0]]||0}" ${canEdit()?'':'disabled'} onchange="updStat('${m.id}','${c[0]}',this.value)"></td>`; });
     html+=`</tr>`;
   });
