@@ -172,7 +172,14 @@
   /* result / pitch */
   .teams{display:flex; gap:22px; flex-wrap:wrap; justify-content:center;}
   .team-box{display:flex; flex-direction:column; align-items:center; gap:12px;}
+  .canvas-wrap{position:relative; display:inline-block; max-width:100%; line-height:0;}
   canvas{border-radius:var(--r-lg); box-shadow:0 14px 44px rgba(0,0,0,.55), inset 0 0 0 1px rgba(168,178,193,.15); max-width:100%;}
+  .team-avg{position:absolute; right:10px; bottom:14px; z-index:3; line-height:1.1; text-align:center; pointer-events:none;
+    background:rgba(10,12,15,.72); backdrop-filter:blur(5px); border:1px solid rgba(168,178,193,.3); border-radius:10px; padding:7px 10px;
+    box-shadow:0 6px 18px rgba(0,0,0,.4);}
+  .team-avg .ta-lbl{font-family:var(--f-label); font-size:9px; letter-spacing:.06em; color:var(--on-var); text-transform:uppercase; margin-bottom:3px;}
+  .team-avg .ta-stars .stars{font-size:13px; letter-spacing:1px;}
+  .team-avg .ta-val{font-family:var(--f-head); font-size:15px; font-weight:700; color:#fff; margin-top:2px;}
   .empty{padding:70px 20px; text-align:center; color:var(--on-var); border:1.5px dashed var(--outline-v);
     border-radius:var(--r-lg); font-size:14px; line-height:1.7;}
 
@@ -234,8 +241,7 @@
     box-shadow:inset 0 1px 0 rgba(168,178,193,.1);}
   .member-row.off{opacity:.45;}
   .mr-top{display:flex; align-items:center; gap:8px;}
-  .mr-bottom{display:flex; align-items:center; gap:8px; padding:7px 0 1px 38px;}
-  .mr-star-lbl{font-family:var(--f-label); font-size:10px; letter-spacing:.06em; color:var(--outline); text-transform:uppercase;}
+  .mr-bottom{display:flex; align-items:center; gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid var(--outline-v);}
   .member-row .ava.sm{width:30px; height:30px; font-size:14px; box-shadow:inset 0 0 0 1px rgba(168,178,193,.3);}
   .ava-click{cursor:pointer; transition:.12s;} .ava-click:hover{box-shadow:inset 0 0 0 2px var(--primary);}
   .member-row .badge{flex-shrink:0;}
@@ -1170,10 +1176,13 @@ function renderRoster(){
         ${m.age?`<span class="mr-age">${m.age}세</span>`:''}
         <span class="mr-sp"></span>
         <button class="mr-toggle ${m.attend?'on':''}" onclick="toggleAttend('${m.id}')">${m.attend?'참석':'불참'}</button>
-        <button class="mr-ic admin-only" onclick="openEdit('${m.id}')" title="수정">✏️</button>
-        <button class="mr-ic admin-only" onclick="delMember('${m.id}')" title="삭제">🗑️</button>
       </div>
-      <div class="mr-bottom admin-only"><span class="mr-star-lbl">실력</span>${starsHtml(m.skill)}<span class="star-val">${skillNum(m.skill)}</span></div>`;
+      <div class="mr-bottom admin-only">
+        ${starsHtml(m.skill)}<span class="star-val">${skillNum(m.skill)}</span>
+        <span class="mr-sp"></span>
+        <button class="mr-ic" onclick="openEdit('${m.id}')" title="수정">✏️ 수정</button>
+        <button class="mr-ic" onclick="delMember('${m.id}')" title="삭제">🗑️</button>
+      </div>`;
     box.appendChild(el);
   });
 }
@@ -1392,14 +1401,17 @@ function buildLineup(players,fm){
   const slots=[]; fm.forEach((row,ri)=>row.forEach((s,ci)=>slots.push({ri,ci,label:s[0],cat:s[1]})));
   const assign=new Array(players.length).fill(false);
   const result=fm.map(row=>row.map(()=>null));
+  const noSub=p=>!p.position2;
   const pass=pred=>slots.forEach(slot=>{ if(result[slot.ri][slot.ci])return;
     const idx=players.findIndex((p,j)=>!assign[j]&&pred(slot,p));
     if(idx>=0){ assign[idx]=true; result[slot.ri][slot.ci]=players[idx]; } });
-  pass((s,p)=>canon(s.label)===canon(p.position));                       // 1) 주포지션(유사 포함) 정확 매칭
-  pass((s,p)=>p.position2&&canon(s.label)===canon(p.position2));         // 2) 서브포지션 정확 매칭
-  pass((s,p)=>s.cat===grp(p.position));                                  // 3) 대분류(주) 매칭
-  pass((s,p)=>p.position2&&s.cat===grp(p.position2));                    // 4) 대분류(서브) 매칭
-  const left=players.filter((p,j)=>!assign[j]); let li=0;                // 5) 그 외 임의 배치
+  pass((s,p)=>noSub(p)&&canon(s.label)===canon(p.position));            // 1) 주포지션'만' 있는 전문 선수 → 정확 슬롯 우선
+  pass((s,p)=>canon(s.label)===canon(p.position));                      // 2) 주포지션(유사 포함) 정확
+  pass((s,p)=>p.position2&&canon(s.label)===canon(p.position2));        // 3) 서브포지션 정확
+  pass((s,p)=>noSub(p)&&s.cat===grp(p.position));                       // 4) 전문(서브없음) 대분류 우선
+  pass((s,p)=>s.cat===grp(p.position));                                 // 5) 주 대분류
+  pass((s,p)=>p.position2&&s.cat===grp(p.position2));                   // 6) 서브 대분류
+  const left=players.filter((p,j)=>!assign[j]); let li=0;               // 7) 그 외 임의 배치
   slots.forEach(slot=>{ if(!result[slot.ri][slot.ci]) result[slot.ri][slot.ci]=left[li++]||null; });
   return result;
 }
@@ -1490,14 +1502,19 @@ function ensureImages(srcs,cb){
     } else { const t=setInterval(()=>{ const c=imgCache.get(s); if(c&&c.ready){clearInterval(t); if(--n===0)cb();} },30); }
   });
 }
+function teamAvgSkill(team){ const arr=[]; team.rows.forEach(row=>row.forEach(p=>{ if(p) arr.push(skillNum(p.skill)); })); return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0; }
+function teamAvgHtml(team){ const v=teamAvgSkill(team); return `<div class="ta-lbl">팀 평균</div><div class="ta-stars">${starsHtml(v)}</div><div class="ta-val">${(Math.round(v*10)/10).toFixed(1)}</div>`; }
 function renderResult(){
   const box=document.getElementById('result'); box.innerHTML='';
   const teams=document.createElement('div'); teams.className='teams';
   ['orange','green'].forEach(k=>{
     const tb=document.createElement('div'); tb.className='team-box';
+    const wrap=document.createElement('div'); wrap.className='canvas-wrap';
     const cv=document.createElement('canvas'); cv.id='cv_'+k; cv._teamKey=k; cv.style.touchAction='none';
     cv.addEventListener('pointerdown',e=>{ const r=refFromCanvasXY(cv,e.clientX,e.clientY); if(r){ e.preventDefault(); startDrag(e,r); } });
-    tb.appendChild(cv);
+    wrap.appendChild(cv);
+    const avg=document.createElement('div'); avg.className='team-avg admin-only'; avg.innerHTML=teamAvgHtml(lastTeams[k]); wrap.appendChild(avg);
+    tb.appendChild(wrap);
     // 후보
     const bench=lastTeams[k].bench||[];
     const br=document.createElement('div'); br.className='bench';
@@ -1578,7 +1595,6 @@ function onPlayerClick(ref){
       <div style="min-width:0"><div class="rc-name" style="font-size:20px">${p.name}</div>
         <div class="rc-tags" style="margin-top:8px; flex-wrap:wrap">
           <span class="badge pos" style="background:${POS_COLORS[grp(p.position)]}">${p.position}${p.position2?' / '+p.position2:''}</span>
-          <span class="badge skill">${starsHtml(p.skill)} ${skillNum(p.skill)}</span>
           <span class="badge skill" style="color:${lastTeams[ref.team].color}">${lastTeams[ref.team].name} · ${loc}</span>
         </div></div></div>
     <div class="modal-sub">📍 이번 라인업 포지션 (1회성)</div>
