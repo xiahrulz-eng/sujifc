@@ -191,7 +191,8 @@
   .filters{display:flex; gap:18px; flex-wrap:wrap;}
   .fgroup{display:flex; flex-direction:column; gap:5px;}
   .fgroup .lab{font-family:var(--f-label); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--outline);}
-  .chips{display:flex; gap:5px;}
+  .chips{display:flex; gap:5px; flex-wrap:wrap;}
+  .sub-chips{flex-basis:100%; width:100%; display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; padding-top:6px; border-top:1px dashed var(--outline-v);}
   .chip{font-family:var(--f-label); font-size:12px; font-weight:600; letter-spacing:.03em; padding:7px 12px; border-radius:var(--r);
     background:var(--c-low); border:1px solid var(--outline-v); color:var(--on-var); cursor:pointer; transition:.14s;}
   .chip:hover{border-color:var(--outline); color:var(--on);}
@@ -259,7 +260,6 @@
   .star-input{cursor:pointer; display:flex; align-items:center; gap:12px; padding:6px 2px; touch-action:none; user-select:none;}
   .star-input .stars{pointer-events:none;}
   .star-val{font-family:var(--f-label); font-size:12px; color:var(--on-var); font-weight:600;}
-  .mini-sel{width:auto; padding:7px 8px; font-size:12px;}
   .mr-toggle{flex-shrink:0; font-family:var(--f-label); font-size:11px; font-weight:700; letter-spacing:.02em;
     padding:5px 9px; border-radius:999px; border:1px solid var(--outline-v); background:var(--c-low); color:var(--on-var); cursor:pointer; transition:.14s;}
   .mr-toggle.on{background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff; border-color:rgba(168,178,193,.35);}
@@ -596,16 +596,6 @@
           <div class="chips" id="attendChips"></div></div>
         <div class="fgroup"><span class="lab">정렬</span>
           <div class="chips" id="sortChips"></div></div>
-        <div class="fgroup admin-only"><span class="lab">별점</span>
-          <div style="display:flex; gap:5px;">
-            <select id="starDir" class="mini-sel" onchange="setStarFilter()"><option value="gte">이상</option><option value="lte">이하</option></select>
-            <select id="starVal" class="mini-sel" onchange="setStarFilter()">
-              <option value="all">전체</option>
-              <option value="5">5.0★</option><option value="4.5">4.5★</option><option value="4">4.0★</option>
-              <option value="3.5">3.5★</option><option value="3">3.0★</option><option value="2.5">2.5★</option>
-              <option value="2">2.0★</option><option value="1.5">1.5★</option><option value="1">1.0★</option><option value="0.5">0.5★</option>
-            </select>
-          </div></div>
       </div>
       <div class="tb-right">
         <button class="btn ghost sm" onclick="toggleAll(true)">전체 참석</button>
@@ -811,7 +801,8 @@ const DEFAULT_ROSTER=[
 
 let members=[], guests=[], editingId=null, tempPhoto=null, lastTeams=null;
 let matches=[], history=[], lastTeamSize=11;
-let filter={q:'',pos:'all',attend:'all',sort:'default',star:'all',starDir:'gte'};
+let filter={q:'',attend:'all'};
+let posSet=new Set(), expandedPos=null, sortKey=null, sortDir=1;
 let hitMap={orange:[],green:[]};
 let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
@@ -1119,27 +1110,37 @@ function showView(v){
 
 /* ============ 필터 UI ============ */
 function buildChips(){
-  const mk=(host,items,key)=>{
-    const el=document.getElementById(host); el.innerHTML='';
-    [['all','전체'],...items.map(x=>[x,x])].forEach(([val,txt])=>{
-      const c=document.createElement('button'); c.className='chip'+(filter[key]===val?' on':'');
-      c.textContent=txt; c.onclick=()=>setFilter(key,val); el.appendChild(c);
-    });
-  };
-  mk('posChips',POS_LIST,'pos');
+  buildPosChips();
   const el=document.getElementById('attendChips'); el.innerHTML='';
   [['all','전체'],['yes','참석'],['no','불참']].forEach(([val,txt])=>{
     const c=document.createElement('button'); c.className='chip'+(filter.attend===val?' on':'');
-    c.textContent=txt; c.onclick=()=>setFilter('attend',val); el.appendChild(c);
+    c.textContent=txt; c.onclick=()=>{filter.attend=val; buildChips(); renderRoster();}; el.appendChild(c);
   });
-  const se=document.getElementById('sortChips'); se.innerHTML='';
-  [['default','기본'],['name','가나다순']].forEach(([val,txt])=>{
-    const c=document.createElement('button'); c.className='chip'+(filter.sort===val?' on':'');
-    c.textContent=txt; c.onclick=()=>setFilter('sort',val); se.appendChild(c);
-  });
+  buildSortChips();
 }
-function setFilter(key,val){ filter[key]=val; buildChips(); renderRoster(); }
-function setStarFilter(){ filter.starDir=document.getElementById('starDir').value; filter.star=document.getElementById('starVal').value; renderRoster(); }
+function chipBtn(label,active,onclick){ const c=document.createElement('button'); c.className='chip'+(active?' on':''); c.textContent=label; c.onclick=onclick; return c; }
+function togglePos(p){ if(posSet.has(p)) posSet.delete(p); else posSet.add(p); }
+function buildPosChips(){
+  const el=document.getElementById('posChips'); el.innerHTML='';
+  el.appendChild(chipBtn('전체', posSet.size===0, ()=>{ posSet.clear(); expandedPos=null; buildPosChips(); renderRoster(); }));
+  el.appendChild(chipBtn('GK', posSet.has('GK'), ()=>{ togglePos('GK'); expandedPos=null; buildPosChips(); renderRoster(); }));
+  ['DF','MF','FW'].forEach(g=>{ const anySel=posSet.has(g)||POS_SUB[g].some(p=>posSet.has(p));
+    el.appendChild(chipBtn(g+' ▾', expandedPos===g||anySel, ()=>{ expandedPos=(expandedPos===g?null:g); buildPosChips(); })); });
+  if(expandedPos){ const sub=document.createElement('div'); sub.className='sub-chips';
+    sub.appendChild(chipBtn(expandedPos+' 전체', posSet.has(expandedPos), ()=>{ togglePos(expandedPos); buildPosChips(); renderRoster(); }));
+    POS_SUB[expandedPos].forEach(p=>sub.appendChild(chipBtn(p, posSet.has(p), ()=>{ togglePos(p); buildPosChips(); renderRoster(); })));
+    el.appendChild(sub);
+  }
+}
+function buildSortChips(){
+  const el=document.getElementById('sortChips'); el.innerHTML='';
+  const arr=k=> sortKey===k ? (sortDir>0?' ▲':' ▼') : '';
+  el.appendChild(chipBtn('기본', sortKey===null, ()=>{ sortKey=null; buildSortChips(); renderRoster(); }));
+  const cycle=k=>{ if(sortKey!==k){sortKey=k;sortDir=1;} else if(sortDir===1){sortDir=-1;} else {sortKey=null;} buildSortChips(); renderRoster(); };
+  el.appendChild(chipBtn('가나다순'+arr('name'), sortKey==='name', ()=>cycle('name')));
+  el.appendChild(chipBtn('별점순'+arr('star'), sortKey==='star', ()=>cycle('star')));
+}
+function setFilter(key,val){ filter[key]=val; renderRoster(); }
 function toggleRosterTools(){ const el=document.getElementById('rosterTools'); el.style.display = (el.style.display==='none'||!el.style.display)?'inline-flex':'none'; }
 function toggleCard(id){ document.getElementById(id).classList.toggle('collapsed'); }
 
@@ -1147,15 +1148,13 @@ function toggleCard(id){ document.getElementById(id).classList.toggle('collapsed
 function filtered(){
   const arr=members.filter(m=>{
     if(filter.q && !m.name.includes(filter.q)) return false;
-    if(filter.pos!=='all' && grp(m.position)!==filter.pos) return false;
+    if(posSet.size && !(posSet.has(m.position)||posSet.has(grp(m.position)))) return false;
     if(filter.attend==='yes' && !m.attend) return false;
     if(filter.attend==='no' && m.attend) return false;
-    if(filter.star!=='all'){ const v=skillNum(m.skill), t=+filter.star;
-      if(filter.starDir==='gte' && v<t) return false;
-      if(filter.starDir==='lte' && v>t) return false; }
     return true;
   });
-  if(filter.sort==='name') arr.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  if(sortKey==='name') arr.sort((a,b)=>a.name.localeCompare(b.name,'ko')*sortDir);
+  else if(sortKey==='star') arr.sort((a,b)=>(skillNum(a.skill)-skillNum(b.skill))*sortDir || a.name.localeCompare(b.name,'ko'));
   return arr;
 }
 function renderRoster(){
@@ -1856,7 +1855,7 @@ function renderStats(q){
     const ava=m.photo?` style="background-image:url('${m.photo}')"`:'';
     html+=`<tr><td class="name-col"><span class="p-name">
       <span class="bc-ava"${ava}>${m.photo?'':m.name[0]}</span>${m.name}
-      <span class="badge pos" style="background:${POS_COLORS[m.position]}">${m.position}</span></span></td>`;
+      <span class="badge pos" style="background:${POS_COLORS[grp(m.position)]}">${m.position}${m.position2?' / '+m.position2:''}</span></span></td>`;
     STAT_COLS.forEach(c=>{ html+=`<td><input class="s-in" type="number" min="0" value="${st[c[0]]||0}" ${canEdit()?'':'disabled'} onchange="updStat('${m.id}','${c[0]}',this.value)"></td>`; });
     html+=`</tr>`;
   });
