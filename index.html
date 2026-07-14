@@ -227,19 +227,31 @@
   .switch.on .track::after{left:19px; background:#eaf0ff;}
   .switch.on{color:var(--primary);}
 
-  /* compact member list (모바일 스크롤 최소화) */
-  .member-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr)); gap:7px;}
-  .member-row{display:flex; align-items:center; gap:6px; padding:7px 10px; border-radius:10px; overflow:hidden;
+  /* 1열 명단 리스트 (2줄: 정보 + 별점) */
+  .member-list{display:flex; flex-direction:column; gap:7px;}
+  .member-row{padding:8px 12px; border-radius:10px;
     background:linear-gradient(180deg,var(--c),var(--c-low)); border:1px solid var(--outline-v);
     box-shadow:inset 0 1px 0 rgba(168,178,193,.1);}
   .member-row.off{opacity:.45;}
-  .member-row .ava.sm{width:28px; height:28px; font-size:13px; box-shadow:inset 0 0 0 1px rgba(168,178,193,.3);}
+  .mr-top{display:flex; align-items:center; gap:8px;}
+  .mr-bottom{display:flex; align-items:center; gap:8px; padding:7px 0 1px 38px;}
+  .mr-star-lbl{font-family:var(--f-label); font-size:10px; letter-spacing:.06em; color:var(--outline); text-transform:uppercase;}
+  .member-row .ava.sm{width:30px; height:30px; font-size:14px; box-shadow:inset 0 0 0 1px rgba(168,178,193,.3);}
   .ava-click{cursor:pointer; transition:.12s;} .ava-click:hover{box-shadow:inset 0 0 0 2px var(--primary);}
   .member-row .badge{flex-shrink:0;}
-  .mr-name{font-family:var(--f-head); font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden;
+  .badge.subpos{background:var(--c-high); color:var(--on-var); border:1px solid var(--outline-v);}
+  .mr-name{font-family:var(--f-head); font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden;
     text-overflow:ellipsis; min-width:24px; flex-shrink:1;}
   .mr-age{font-family:var(--f-label); font-size:11px; color:var(--on-var); flex-shrink:0;}
   .mr-sp{flex:1; min-width:2px;}
+  /* 별점 */
+  .stars{position:relative; display:inline-block; font-family:Arial,sans-serif; font-size:15px; line-height:1; color:#4a4e57; white-space:nowrap; letter-spacing:2px;}
+  .stars::before{content:'★★★★★';}
+  .stars .fill{position:absolute; left:0; top:0; overflow:hidden; color:#ff9f1a; white-space:nowrap;}
+  .stars .fill::before{content:'★★★★★';}
+  .stars.big{font-size:28px; letter-spacing:5px;}
+  .star-input{cursor:pointer; display:flex; align-items:center; gap:12px; padding:4px 0;}
+  .star-val{font-family:var(--f-label); font-size:12px; color:var(--on-var); font-weight:600;}
   .mr-toggle{flex-shrink:0; font-family:var(--f-label); font-size:11px; font-weight:700; letter-spacing:.02em;
     padding:5px 9px; border-radius:999px; border:1px solid var(--outline-v); background:var(--c-low); color:var(--on-var); cursor:pointer; transition:.14s;}
   .mr-toggle.on{background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff; border-color:rgba(168,178,193,.35);}
@@ -520,7 +532,7 @@
           <div><label class="fld">포지션</label>
             <select id="gPos"><option>GK</option><option>DF</option><option selected>MF</option><option>FW</option></select></div>
           <div class="admin-only"><label class="fld">실력</label>
-            <select id="gSkill"><option>상</option><option selected>중</option><option>하</option></select></div>
+            <select id="gSkill"><option value="5">5★</option><option value="4">4★</option><option value="3" selected>3★</option><option value="2">2★</option><option value="1">1★</option></select></div>
           <div style="max-width:78px"><label class="fld">인원</label>
             <input type="number" id="gCount" min="1" max="20" value="1"></div>
         </div>
@@ -572,8 +584,6 @@
       <div class="filters">
         <div class="fgroup"><span class="lab">포지션</span>
           <div class="chips" id="posChips"></div></div>
-        <div class="fgroup admin-only"><span class="lab">실력</span>
-          <div class="chips" id="skillChips"></div></div>
         <div class="fgroup"><span class="lab">참석</span>
           <div class="chips" id="attendChips"></div></div>
         <div class="fgroup"><span class="lab">정렬</span>
@@ -676,11 +686,11 @@
         <input type="number" id="mAge" min="1" max="99" placeholder="나이"></div>
     </div>
     <div class="rowg">
-      <div><label class="fld">선호 포지션</label>
-        <select id="mPos"><option>GK</option><option>DF</option><option>MF</option><option>FW</option></select></div>
-      <div><label class="fld">실력</label>
-        <select id="mSkill"><option>상</option><option selected>중</option><option>하</option></select></div>
+      <div><label class="fld">주 포지션</label><select id="mPos"></select></div>
+      <div><label class="fld">서브 포지션</label><select id="mPos2"></select></div>
     </div>
+    <label class="fld">실력 (별점)</label>
+    <div class="star-input" id="starInput"></div>
     <div class="modal-btns">
       <button class="btn primary" style="flex:1;" onclick="saveMember()">저장</button>
       <button class="btn ghost" style="flex:1;" onclick="closeModal()">취소</button>
@@ -719,8 +729,22 @@
 const POS_COLORS={GK:'#f1c40f',DF:'#5b9bff',MF:'#3ddc84',FW:'#ff5a52'};
 const DEFAULT_PROFILE_SRC='profile-none.png';
 const POS_LIST=['GK','DF','MF','FW'];
-const SKILL_LIST=['상','중','하'];
-const SKILL_SCORE={'상':3,'중':2,'하':1};
+// 세부 포지션 → 대분류
+const POS_GROUP={GK:'GK', DF:'DF',LB:'DF',LWB:'DF',CB:'DF',RB:'DF',RWB:'DF', MF:'MF',CDM:'MF',CM:'MF',CAM:'MF',LM:'MF',RM:'MF', FW:'FW',LW:'FW',RW:'FW',CF:'FW',ST:'FW'};
+function grp(pos){ return POS_GROUP[pos]||'MF'; }
+// 유사 포지션 정규화 (LCB=RCB=CB, LCM=RCM=CM, LWB=LB=LM, RWB=RB=RM, LS=LF=LW, RS=RF=RW, CF=ST)
+const POS_CANON={LCB:'CB',RCB:'CB', LCM:'CM',RCM:'CM', LS:'LW',LF:'LW', RS:'RW',RF:'RW', LWB:'LB',LM:'LB', RWB:'RB',RM:'RB', CF:'ST'};
+function canon(pos){ return POS_CANON[pos]||pos; }
+const POS_SUB={DF:['LB','LWB','CB','RB','RWB'], MF:['CDM','CM','CAM','LM','RM'], FW:['LW','RW','CF','ST']};
+function skillNum(v){ if(typeof v==='number')return Math.min(5,Math.max(0.5,v)); if(v==='상')return 4; if(v==='중')return 3; if(v==='하')return 2; const n=parseFloat(v); return isNaN(n)?3:Math.min(5,Math.max(0.5,n)); }
+function posOptionsHtml(sel,includeNone){
+  let o=includeNone?`<option value="" ${!sel?'selected':''}>(없음)</option>`:'';
+  o+=`<option value="GK" ${sel==='GK'?'selected':''}>GK</option>`;
+  [['DF','수비'],['MF','미드'],['FW','공격']].forEach(([g,lbl])=>{ o+=`<optgroup label="${lbl} ${g}"><option value="${g}" ${sel===g?'selected':''}>${g} (전체)</option>`;
+    POS_SUB[g].forEach(p=>o+=`<option value="${p}" ${sel===p?'selected':''}>${p}</option>`); o+=`</optgroup>`; });
+  return o;
+}
+function starsHtml(val){ const v=skillNum(val); return `<span class="stars"><span class="fill" style="width:${v/5*100}%"></span></span>`; }
 /* 포메이션: 아래(GK)→위(FW) 순서의 행 배열. 각 슬롯=[표시라벨, 밸런스카테고리] */
 const FORMATIONS={
   '4-3-3':[
@@ -801,7 +825,7 @@ function requireAdmin(){ if(canEdit()) return true; toast('운영진 로그인�
 function loadAttend(){ const r=localStorage.getItem('suziFC_attend'); if(r){try{attendMap=JSON.parse(r);}catch(e){attendMap={};}} }
 function saveAttend(){ localStorage.setItem('suziFC_attend',JSON.stringify(attendMap)); }
 function applyAttendToMembers(){ members.forEach(m=>{ if(attendMap[m.id]!==undefined) m.attend=attendMap[m.id]; }); }
-function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,skill:m.skill,photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},order:(m.order!==undefined?m.order:(i||0))}; }
+function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,position2:m.position2||'',skill:skillNum(m.skill),photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},order:(m.order!==undefined?m.order:(i||0))}; }
 function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||'',momId:mt.momId||'',momName:mt.momName||''}; }
 function initFirebase(){
   if(!window.firebase || !window.SUJI_FIREBASE_CONFIG){ document.getElementById('gateBody').innerHTML='<p class="gate-msg">앱을 불러오지 못했습니다.<br>인터넷 연결 후 새로고침 해주세요.</p>'; return false; }
@@ -841,7 +865,7 @@ function subscribeRoster(){
   rosterUnsub=FB.collection('roster').onSnapshot(snap=>{
     if(snap.empty) return;
     const arr=[];
-    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,name:d.name,age:(d.age??null),position:d.position||'MF',skill:d.skill||'중',photo:d.photo||null,stats:d.stats||{...EMPTY_STATS},order:(d.order??0),attend:(attendMap[doc.id]!==undefined?attendMap[doc.id]:true)}); });
+    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,name:d.name,age:(d.age??null),position:d.position||'MF',position2:(d.position2||''),skill:skillNum(d.skill),photo:d.photo||null,stats:d.stats||{...EMPTY_STATS},order:(d.order??0),attend:(attendMap[doc.id]!==undefined?attendMap[doc.id]:true)}); });
     arr.sort((a,b)=>(a.order-b.order)||a.name.localeCompare(b.name,'ko'));
     members=arr; save();
     renderRoster(); renderSummary();
@@ -1037,9 +1061,9 @@ function applyCrop(){ if(!cropImg){ closeCrop(); return; } const OUT=340, k=OUT/
 /* ============ 저장/생성 ============ */
 function save(){ localStorage.setItem('suziFC_members',JSON.stringify(members)); }
 function load(){ const r=localStorage.getItem('suziFC_members'); if(r){try{members=JSON.parse(r);}catch(e){members=[];}} if(!members.length) seed();
-  members.forEach(m=>{ if(!m.stats) m.stats={...EMPTY_STATS}; }); }
+  members.forEach(m=>{ if(!m.stats) m.stats={...EMPTY_STATS}; m.skill=skillNum(m.skill); if(m.position2===undefined)m.position2=''; }); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function cloneDefault(){ return DEFAULT_ROSTER.map(r=>({id:uid(),name:r[0],age:r[1],position:r[2],skill:r[3],photo:null,attend:true,stats:{...EMPTY_STATS}})); }
+function cloneDefault(){ return DEFAULT_ROSTER.map(r=>({id:uid(),name:r[0],age:r[1],position:r[2],position2:'',skill:skillNum(r[3]),photo:null,attend:true,stats:{...EMPTY_STATS}})); }
 function seed(){ members=cloneDefault(); save(); }
 
 /* ============ 게스트 ============ */
@@ -1047,10 +1071,10 @@ function saveGuests(){ localStorage.setItem('suziFC_guests',JSON.stringify(guest
 function loadGuests(){ const r=localStorage.getItem('suziFC_guests'); if(r){try{guests=JSON.parse(r);}catch(e){guests=[];}} }
 function renumberGuests(){ guests.forEach((g,i)=>g.name='게스트'+(i+1)); }
 function addGuests(){
-  const pos=document.getElementById('gPos').value, skill=document.getElementById('gSkill').value;
+  const pos=document.getElementById('gPos').value, skill=skillNum(document.getElementById('gSkill').value);
   let n=parseInt(document.getElementById('gCount').value)||1; n=Math.max(1,Math.min(20,n));
-  for(let i=0;i<n;i++) guests.push({id:uid(),name:'',age:null,position:pos,skill,photo:null,attend:true,isGuest:true});
-  renumberGuests(); saveGuests(); renderGuests(); renderSummary(); toast(`게스트 ${n}명 추가 (${pos}·${skill})`);
+  for(let i=0;i<n;i++) guests.push({id:uid(),name:'',age:null,position:pos,position2:'',skill,photo:null,attend:true,isGuest:true});
+  renumberGuests(); saveGuests(); renderGuests(); renderSummary(); toast(`게스트 ${n}명 추가 (${pos}·${skill}★)`);
 }
 function removeGuest(id){ guests=guests.filter(g=>g.id!==id); renumberGuests(); saveGuests(); renderGuests(); renderSummary(); }
 function clearGuests(){ if(!guests.length)return; if(!confirm('게스트를 모두 삭제할까요?'))return; guests=[]; saveGuests(); renderGuests(); renderSummary(); toast('게스트를 모두 삭제했습니다'); }
@@ -1059,7 +1083,7 @@ function renderGuests(){
   document.getElementById('guestCount').textContent=guests.length?`${guests.length}명`:'';
   if(!guests.length){ box.innerHTML='<span class="muted" style="font-size:12px;">추가된 게스트가 없습니다.</span>'; return; }
   guests.forEach(g=>{ const c=document.createElement('span'); c.className='guest-chip';
-    c.innerHTML=`${g.name} <span class="gp" style="background:${POS_COLORS[g.position]}">${g.position}</span><span class="gs">${g.skill}</span><span class="gx" onclick="removeGuest('${g.id}')">✕</span>`;
+    c.innerHTML=`${g.name} <span class="gp" style="background:${POS_COLORS[grp(g.position)]}">${g.position}</span><span class="gs">${g.skill}★</span><span class="gx" onclick="removeGuest('${g.id}')">✕</span>`;
     box.appendChild(c); });
   const clr=document.createElement('button'); clr.className='btn ghost sm'; clr.style.marginLeft='4px'; clr.textContent='전체 삭제'; clr.onclick=clearGuests; box.appendChild(clr);
 }
@@ -1084,7 +1108,6 @@ function buildChips(){
     });
   };
   mk('posChips',POS_LIST,'pos');
-  mk('skillChips',SKILL_LIST,'skill');
   const el=document.getElementById('attendChips'); el.innerHTML='';
   [['all','전체'],['yes','참석'],['no','불참']].forEach(([val,txt])=>{
     const c=document.createElement('button'); c.className='chip'+(filter.attend===val?' on':'');
@@ -1104,8 +1127,7 @@ function toggleCard(id){ document.getElementById(id).classList.toggle('collapsed
 function filtered(){
   const arr=members.filter(m=>{
     if(filter.q && !m.name.includes(filter.q)) return false;
-    if(filter.pos!=='all' && m.position!==filter.pos) return false;
-    if(filter.skill!=='all' && m.skill!==filter.skill) return false;
+    if(filter.pos!=='all' && grp(m.position)!==filter.pos) return false;
     if(filter.attend==='yes' && !m.attend) return false;
     if(filter.attend==='no' && m.attend) return false;
     return true;
@@ -1123,15 +1145,18 @@ function renderRoster(){
     const el=document.createElement('div'); el.className='member-row'+(m.attend?'':' off');
     const ava=m.photo?`style="background-image:url('${m.photo}')"`:'';
     el.innerHTML=`
-      <span class="ava sm ava-click" ${ava} onclick="viewMemberPhoto('${m.id}')">${m.photo?'':m.name[0]}</span>
-      <span class="mr-name">${m.name}</span>
-      <span class="badge pos" style="background:${POS_COLORS[m.position]}">${m.position}</span>
-      <span class="badge skill admin-only">${m.skill}</span>
-      ${m.age?`<span class="mr-age">${m.age}세</span>`:''}
-      <span class="mr-sp"></span>
-      <button class="mr-toggle ${m.attend?'on':''}" onclick="toggleAttend('${m.id}')">${m.attend?'참석':'불참'}</button>
-      <button class="mr-ic admin-only" onclick="openEdit('${m.id}')" title="수정">✏️</button>
-      <button class="mr-ic admin-only" onclick="delMember('${m.id}')" title="삭제">🗑️</button>`;
+      <div class="mr-top">
+        <span class="ava sm ava-click" ${ava} onclick="viewMemberPhoto('${m.id}')">${m.photo?'':m.name[0]}</span>
+        <span class="mr-name">${m.name}</span>
+        <span class="badge pos" style="background:${POS_COLORS[grp(m.position)]}">${m.position}</span>
+        ${m.position2?`<span class="badge subpos">${m.position2}</span>`:''}
+        ${m.age?`<span class="mr-age">${m.age}세</span>`:''}
+        <span class="mr-sp"></span>
+        <button class="mr-toggle ${m.attend?'on':''}" onclick="toggleAttend('${m.id}')">${m.attend?'참석':'불참'}</button>
+        <button class="mr-ic admin-only" onclick="openEdit('${m.id}')" title="수정">✏️</button>
+        <button class="mr-ic admin-only" onclick="delMember('${m.id}')" title="삭제">🗑️</button>
+      </div>
+      <div class="mr-bottom admin-only"><span class="mr-star-lbl">실력</span>${starsHtml(m.skill)}<span class="star-val">${skillNum(m.skill)}</span></div>`;
     box.appendChild(el);
   });
 }
@@ -1150,15 +1175,22 @@ function toggleAll(v){ filtered().forEach(m=>{m.attend=v; attendMap[m.id]=v;}); 
 function delMember(id){ if(!requireAdmin())return; if(!confirm('이 선수를 삭제할까요?'))return; members=members.filter(m=>m.id!==id); save(); fbDeleteMember(id); renderRoster(); renderSummary(); }
 
 /* ============ 모달 ============ */
+let tempSkill=3;
+function renderStarInput(){ const el=document.getElementById('starInput');
+  el.innerHTML=`<span class="stars big"><span class="fill" style="width:${tempSkill/5*100}%"></span></span><span class="star-val">${tempSkill}점</span>`; }
 function openAdd(){ if(!requireAdmin())return; editingId=null; tempPhoto=null;
   document.getElementById('modalTitle').textContent='선수 추가';
   document.getElementById('mName').value=''; document.getElementById('mAge').value='';
-  document.getElementById('mPos').value='MF'; document.getElementById('mSkill').value='중';
+  document.getElementById('mPos').innerHTML=posOptionsHtml('MF',false);
+  document.getElementById('mPos2').innerHTML=posOptionsHtml('',true);
+  tempSkill=3; renderStarInput();
   setAva(null,'사진 선택'); document.getElementById('overlay').classList.add('on'); }
 function openEdit(id){ if(!requireAdmin())return; const m=members.find(x=>x.id===id); editingId=id; tempPhoto=m.photo;
   document.getElementById('modalTitle').textContent='선수 수정';
   document.getElementById('mName').value=m.name; document.getElementById('mAge').value=m.age||'';
-  document.getElementById('mPos').value=m.position; document.getElementById('mSkill').value=m.skill;
+  document.getElementById('mPos').innerHTML=posOptionsHtml(m.position,false);
+  document.getElementById('mPos2').innerHTML=posOptionsHtml(m.position2||'',true);
+  tempSkill=skillNum(m.skill); renderStarInput();
   setAva(m.photo,m.name[0]); document.getElementById('overlay').classList.add('on'); }
 function setAva(photo,fb){ const a=document.getElementById('avaEdit');
   if(photo){a.style.backgroundImage=`url('${photo}')`;a.innerHTML='';}
@@ -1172,20 +1204,20 @@ function saveMember(){
   if(!requireAdmin())return;
   const name=document.getElementById('mName').value.trim(); if(!name){toast('이름을 입력하세요');return;}
   const age=parseInt(document.getElementById('mAge').value)||null;
-  const pos=document.getElementById('mPos').value, skill=document.getElementById('mSkill').value;
+  const pos=document.getElementById('mPos').value, pos2=document.getElementById('mPos2').value, skill=tempSkill;
   let target;
-  if(editingId){ target=members.find(x=>x.id===editingId); Object.assign(target,{name,age,position:pos,skill,photo:tempPhoto}); }
-  else{ target={id:uid(),name,age,position:pos,skill,photo:tempPhoto,attend:true,stats:{...EMPTY_STATS},order:Date.now()}; members.push(target); }
+  if(editingId){ target=members.find(x=>x.id===editingId); Object.assign(target,{name,age,position:pos,position2:pos2,skill,photo:tempPhoto}); }
+  else{ target={id:uid(),name,age,position:pos,position2:pos2,skill,photo:tempPhoto,attend:true,stats:{...EMPTY_STATS},order:Date.now()}; members.push(target); }
   save(); fbSaveMember(target); renderRoster(); renderSummary(); closeModal(); toast(editingId?'수정 완료':'선수 추가 완료');
 }
 
 /* ============ 엑셀 양식 / 업로드 ============ */
 function downloadTemplate(){
-  const header=['이름','나이','포지션','실력'];
-  const sample=[['홍길동',32,'FW','상'],['김수비',28,'DF','중'],['이미드',35,'MF','하'],['박골키',41,'GK','중']];
+  const header=['이름','나이','주포지션','서브포지션','실력(1~5)'];
+  const sample=[['홍길동',32,'ST','FW',4.5],['김수비',28,'CB','',3],['이미드',35,'CDM','DF',3.5],['박골키',41,'GK','',2]];
   if(window.XLSX){
     const ws=XLSX.utils.aoa_to_sheet([header,...sample]);
-    ws['!cols']=[{wch:12},{wch:6},{wch:12},{wch:8}];
+    ws['!cols']=[{wch:12},{wch:6},{wch:12},{wch:12},{wch:10}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'명단');
     XLSX.writeFile(wb,'수지FC_명단양식.xlsx');
   } else {
@@ -1198,8 +1230,8 @@ function downloadTemplate(){
 function exportRoster(){
   if(!requireAdmin())return;
   if(!members.length){ toast('내보낼 명단이 없습니다'); return; }
-  const header=['이름','나이','포지션','실력'];
-  const data=members.map(m=>[m.name,m.age||'',m.position,m.skill]);
+  const header=['이름','나이','주포지션','서브포지션','실력(1~5)'];
+  const data=members.map(m=>[m.name,m.age||'',m.position,m.position2||'',skillNum(m.skill)]);
   if(window.XLSX){
     const ws=XLSX.utils.aoa_to_sheet([header,...data]); ws['!cols']=[{wch:12},{wch:6},{wch:12},{wch:8}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'명단'); XLSX.writeFile(wb,'수지FC_명단.xlsx');
@@ -1211,16 +1243,15 @@ function exportRoster(){
   toast(`현재 명단 ${members.length}명을 내보냈습니다 📤`);
 }
 function normPos(v){ v=(v||'').toString().trim().toUpperCase();
+  if(POS_GROUP[v]) return v;                              // 세부 포지션(LB,CDM,ST 등) 그대로
   if(v.startsWith('G')||v.includes('골키')) return 'GK';
-  if(v.startsWith('D')||v.includes('수비')) return 'DF';
-  if(v.startsWith('F')||v.startsWith('S')||v.includes('공격')||v.includes('스트라이커')) return 'FW';
-  if(v.startsWith('M')||v.includes('미드')) return 'MF';
+  if(v.includes('수비')) return 'DF';
+  if(v.includes('공격')||v.includes('스트라이커')) return 'FW';
+  if(v.includes('미드')) return 'MF';
+  if(v.startsWith('D')) return 'DF';
+  if(v.startsWith('F')) return 'FW';
+  if(v.startsWith('M')) return 'MF';
   return 'MF';
-}
-function normSkill(v){ v=(v||'').toString().trim().toUpperCase();
-  if(['상','A','상급','HIGH','H'].includes(v)) return '상';
-  if(['하','C','하급','LOW','L'].includes(v)) return '하';
-  return '중';
 }
 function rowsToMembers(rows){
   const pick=(r,keys)=>{ for(const k of keys) if(r[k]!==undefined&&r[k]!=='') return r[k]; return ''; };
@@ -1229,9 +1260,10 @@ function rowsToMembers(rows){
     const name=pick(r,['이름','성명','name','Name','NAME']).toString().trim();
     if(!name) return;
     const age=parseInt(pick(r,['나이','age','Age','AGE']))||null;
-    const pos=normPos(pick(r,['포지션','position','Position','pos','POS']));
-    const skill=normSkill(pick(r,['실력','skill','Skill','SKILL','급']));
-    out.push({id:uid(),name,age,position:pos,skill,photo:null,attend:true,stats:{...EMPTY_STATS}});
+    const pos=normPos(pick(r,['포지션','주포지션','position','Position','pos','POS']));
+    const pos2raw=pick(r,['서브포지션','sub','position2']); const pos2=pos2raw?normPos(pos2raw):'';
+    const skill=skillNum(pick(r,['실력','별점','skill','Skill','SKILL']));
+    out.push({id:uid(),name,age,position:pos,position2:pos2,skill,photo:null,attend:true,stats:{...EMPTY_STATS}});
   });
   return out;
 }
@@ -1272,7 +1304,7 @@ document.getElementById('xlsInput').addEventListener('change',e=>{
 
 /* ============ 팀 생성 ============ */
 function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
-function sc(p){ return SKILL_SCORE[p.skill]; }
+function sc(p){ return skillNum(p.skill); }
 function generate(){
   const fmKeyO=(document.getElementById('formationO')||{}).value||'4-3-3';
   const fmKeyG=(document.getElementById('formationG')||{}).value||'4-3-3';
@@ -1296,7 +1328,7 @@ function generate(){
   renderResult(); toast(rest.length?`팀 생성 완료! ⚽ (${fmKeyO} vs ${fmKeyG}, 후보 ${rest.length}명)`:`팀 생성 완료! ⚽ (${fmKeyO} vs ${fmKeyG})`);
 }
 function byPosition(pool,FO,FG,N){
-  const bp={GK:[],DF:[],MF:[],FW:[]}; shuffle(pool).forEach(p=>bp[p.position].push(p));
+  const bp={GK:[],DF:[],MF:[],FW:[]}; shuffle(pool).forEach(p=>bp[grp(p.position)].push(p));
   const A=[],B=[],left=[];
   POS_LIST.forEach(pos=>{ const arr=bp[pos];
     for(let i=0;i<FO[pos];i++)if(arr.length)A.push(arr.shift());
@@ -1312,7 +1344,7 @@ function bySkill(pool,N){
   return {A,B};
 }
 function byBoth(pool,FO,FG,N){
-  const bp={GK:[],DF:[],MF:[],FW:[]}; shuffle(pool).forEach(p=>bp[p.position].push(p));
+  const bp={GK:[],DF:[],MF:[],FW:[]}; shuffle(pool).forEach(p=>bp[grp(p.position)].push(p));
   const A=[],B=[],left=[]; let sa=0,sb=0;
   POS_LIST.forEach(pos=>{ const arr=bp[pos].sort((a,b)=>sc(b)-sc(a)); const take=arr.splice(0,FO[pos]+FG[pos]);
     let ca=0,cb=0;
@@ -1326,15 +1358,19 @@ function byBoth(pool,FO,FG,N){
   return {A,B};
 }
 function buildLineup(players,fm){
-  const used=new Set();
-  // 1차: 슬롯 카테고리와 선수 포지션 매칭
-  const rows=fm.map(row=>row.map(slot=>{
-    const idx=players.findIndex((p,j)=>!used.has(j)&&p.position===slot[1]);
-    if(idx>=0){ used.add(idx); return players[idx]; } return null;
-  }));
-  // 2차: 남은 선수로 빈 슬롯 채우기
-  const left=players.filter((p,j)=>!used.has(j)); let li=0;
-  return rows.map(row=>row.map(p=>p||left[li++]||null));
+  const slots=[]; fm.forEach((row,ri)=>row.forEach((s,ci)=>slots.push({ri,ci,label:s[0],cat:s[1]})));
+  const assign=new Array(players.length).fill(false);
+  const result=fm.map(row=>row.map(()=>null));
+  const pass=pred=>slots.forEach(slot=>{ if(result[slot.ri][slot.ci])return;
+    const idx=players.findIndex((p,j)=>!assign[j]&&pred(slot,p));
+    if(idx>=0){ assign[idx]=true; result[slot.ri][slot.ci]=players[idx]; } });
+  pass((s,p)=>canon(s.label)===canon(p.position));                       // 1) 주포지션(유사 포함) 정확 매칭
+  pass((s,p)=>p.position2&&canon(s.label)===canon(p.position2));         // 2) 서브포지션 정확 매칭
+  pass((s,p)=>s.cat===grp(p.position));                                  // 3) 대분류(주) 매칭
+  pass((s,p)=>p.position2&&s.cat===grp(p.position2));                    // 4) 대분류(서브) 매칭
+  const left=players.filter((p,j)=>!assign[j]); let li=0;                // 5) 그 외 임의 배치
+  slots.forEach(slot=>{ if(!result[slot.ri][slot.ci]) result[slot.ri][slot.ci]=left[li++]||null; });
+  return result;
 }
 
 /* ============ 캔버스 ============ */
@@ -1510,13 +1546,13 @@ function onPlayerClick(ref){
       <span class="ava lg"${ava}>${p.photo?'':p.name[0]}</span>
       <div style="min-width:0"><div class="rc-name" style="font-size:20px">${p.name}</div>
         <div class="rc-tags" style="margin-top:8px; flex-wrap:wrap">
-          <span class="badge pos" style="background:${POS_COLORS[p.position]}">${p.position}</span>
-          <span class="badge skill">실력 ${p.skill}</span>
+          <span class="badge pos" style="background:${POS_COLORS[grp(p.position)]}">${p.position}${p.position2?' / '+p.position2:''}</span>
+          <span class="badge skill">${starsHtml(p.skill)} ${skillNum(p.skill)}</span>
           <span class="badge skill" style="color:${lastTeams[ref.team].color}">${lastTeams[ref.team].name} · ${loc}</span>
         </div></div></div>
     <div class="modal-sub">📍 이번 라인업 포지션 (1회성)</div>
     <div class="pos-btns">
-      ${POS_LIST.map(pos=>`<button class="${p.position===pos?'cur':''}" style="${p.position===pos?`background:${POS_COLORS[pos]}`:''}" onclick="changeLineupPos('${pos}')">${pos}</button>`).join('')}
+      ${POS_LIST.map(pos=>`<button class="${grp(p.position)===pos?'cur':''}" style="${grp(p.position)===pos?`background:${POS_COLORS[pos]}`:''}" onclick="changeLineupPos('${pos}')">${pos}</button>`).join('')}
     </div>
     <button class="btn danger" style="width:100%; margin-bottom:16px;" onclick="excludeFromLineup()">🚫 이 선수 라인업에서 제외</button>
     <div class="modal-sub">🔄 다른 선수와 교체 / 위치 이동</div>
@@ -1796,6 +1832,11 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 document.querySelectorAll('input[name=mtd]').forEach(r=>r.addEventListener('change',()=>{
   document.querySelectorAll('.method .opt').forEach(o=>o.classList.remove('sel')); r.closest('.opt').classList.add('sel'); }));
 document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeModal(); });
+(function(){ const si=document.getElementById('starInput');
+  const setFromX=e=>{ const stars=si.querySelector('.stars'); if(!stars)return; const rect=stars.getBoundingClientRect();
+    let v=Math.ceil((e.clientX-rect.left)/rect.width*10)/2; tempSkill=Math.min(5,Math.max(0.5,v)); renderStarInput(); };
+  si.addEventListener('click',setFromX);
+})();
 document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target.id==='editOverlay')closeEditLineup(); });
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
 document.getElementById('adminOverlay').addEventListener('click',e=>{ if(e.target.id==='adminOverlay')closeAdminManage(); });
