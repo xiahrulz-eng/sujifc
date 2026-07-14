@@ -115,6 +115,8 @@
   select{opacity:.95;}
   input::placeholder{color:var(--outline);}
   select:focus,input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(27,43,72,.55);}
+  input[type=date]{-webkit-appearance:none; appearance:none; min-width:0; max-width:100%; height:40px; line-height:normal;}
+  input[type=date]::-webkit-date-and-time-value{text-align:left;}
 
   /* lineup view grid */
   .lineup-grid{display:grid; grid-template-columns:340px 1fr; gap:24px; align-items:start;}
@@ -701,7 +703,7 @@ function loadAttend(){ const r=localStorage.getItem('suziFC_attend'); if(r){try{
 function saveAttend(){ localStorage.setItem('suziFC_attend',JSON.stringify(attendMap)); }
 function applyAttendToMembers(){ members.forEach(m=>{ if(attendMap[m.id]!==undefined) m.attend=attendMap[m.id]; }); }
 function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,skill:m.skill,photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},order:(m.order!==undefined?m.order:(i||0))}; }
-function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||''}; }
+function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||'',momId:mt.momId||'',momName:mt.momName||''}; }
 function initFirebase(){
   if(!window.firebase || !window.SUJI_FIREBASE_CONFIG) return false;
   try{
@@ -711,8 +713,10 @@ function initFirebase(){
     FBauth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{}); // 자동 로그인(세션 유지)
     FB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
     FBauth.onAuthStateChanged(u=>{ currentUser=u;
-      if(u){ FB.collection('admins').doc(u.uid).get().then(doc=>{ isAdmin=doc.exists; updateAdminUI(); if(isAdmin) maybeSeed(); }).catch(()=>{ isAdmin=false; updateAdminUI(); }); }
-      else { isAdmin=false; updateAdminUI(); } });
+      if(u){ FB.collection('admins').doc(u.uid).get().then(doc=>{ isAdmin=doc.exists; updateAdminUI();
+        if(isAdmin){ maybeSeed(); requestNotifPermission(); subscribeAdminRequests(); } else unsubAdminRequests();
+      }).catch(()=>{ isAdmin=false; updateAdminUI(); }); }
+      else { isAdmin=false; unsubAdminRequests(); updateAdminUI(); } });
     subscribeRoster(); subscribeMatches(); subscribeTeamConfig();
     return true;
   }catch(e){ console.error('Firebase init 실패',e); FB=null; return false; }
@@ -731,7 +735,7 @@ function subscribeRoster(){
 function subscribeMatches(){
   FB.collection('matches').onSnapshot(snap=>{
     const arr=[];
-    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,at:d.at||0,date:d.date||'',snap:d.snap,orangeScore:(d.orangeScore??''),greenScore:(d.greenScore??''),memo:d.memo||''}); });
+    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,at:d.at||0,date:d.date||'',snap:d.snap,orangeScore:(d.orangeScore??''),greenScore:(d.greenScore??''),memo:d.memo||'',momId:d.momId||'',momName:d.momName||''}); });
     arr.sort((a,b)=>b.at-a.at);
     matches=arr; saveMatches();
     if(document.getElementById('view-match').classList.contains('on')) renderMatches();
@@ -813,6 +817,7 @@ function openAdminManage(){
   document.getElementById('adminOverlay').classList.add('on');
   Promise.all([FB.collection('adminRequests').get(), FB.collection('admins').get()]).then(([reqs,admins])=>{
     let html='<h3>👥 운영진 관리</h3>';
+    if('Notification' in window && Notification.permission!=='granted') html+=`<button class="btn ghost sm" style="width:100%; margin-bottom:12px;" onclick="requestNotifPermission()">🔔 신청 알림 켜기</button>`;
     html+='<div class="modal-sub">🕓 승인 대기</div>';
     if(reqs.empty) html+='<p class="muted" style="font-size:12px;margin:0 0 8px;">대기 중인 신청이 없습니다.</p>';
     else reqs.forEach(d=>{ const r=d.data(), nm=(r.name||'').replace(/'/g,"\\'"), em=(r.email||'').replace(/'/g,"\\'");
@@ -832,6 +837,24 @@ function approveReq(uid,name,email){ FB.collection('admins').doc(uid).set({name,
   .then(()=>FB.collection('adminRequests').doc(uid).delete()).then(()=>{ toast('승인 완료 ✅'); openAdminManage(); }).catch(e=>{ console.error(e); toast('승인 실패'); }); }
 function rejectReq(uid){ FB.collection('adminRequests').doc(uid).delete().then(()=>{ toast('신청을 거절했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
 function removeAdmin(uid){ if(!confirm('이 운영진 권한을 제거할까요?'))return; FB.collection('admins').doc(uid).delete().then(()=>{ toast('운영진에서 제거했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
+/* 운영진 신청 알림 (앱이 열려있거나 백그라운드 상태일 때 팝업) */
+let adminReqUnsub=null, adminReqInit=false;
+function requestNotifPermission(){ try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission().catch(()=>{}); }catch(e){} }
+function notifyAdmin(title,body){
+  toast('🔔 '+body);
+  try{ if('Notification' in window && Notification.permission==='granted'){
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,{body,icon:'icon-192.png',badge:'icon-192.png',tag:'suji-adminreq'})).catch(()=>{ try{new Notification(title,{body,icon:'icon-192.png'});}catch(_){}}); }
+    else { try{ new Notification(title,{body,icon:'icon-192.png'}); }catch(_){}}
+  } }catch(e){}
+}
+function subscribeAdminRequests(){ if(adminReqUnsub||!FB)return; adminReqInit=false;
+  adminReqUnsub=FB.collection('adminRequests').onSnapshot(snap=>{
+    if(!adminReqInit){ adminReqInit=true; return; } // 최초 로딩분은 알림 제외
+    snap.docChanges().forEach(ch=>{ if(ch.type==='added'){ const r=ch.doc.data(); notifyAdmin('수지FC 운영진 신청', (r.name||'익명')+' 님이 운영진 가입을 신청했습니다'); } });
+  }, e=>console.error('adminReq',e));
+}
+function unsubAdminRequests(){ if(adminReqUnsub){ try{adminReqUnsub();}catch(e){} adminReqUnsub=null; adminReqInit=false; } }
 function compressImage(src,cb,maxArg){
   const img=new Image();
   img.onload=()=>{ const max=maxArg||340; let w=img.width,h=img.height;
@@ -1470,18 +1493,29 @@ function todayStr(){ const d=new Date(),p=n=>('0'+n).slice(-2); return `${d.getF
 function registerMatch(){
   if(!requireAdmin())return;
   if(!lastTeams){ toast('먼저 팀을 생성하세요'); return; }
-  const mt={id:uid(),at:Date.now(),date:todayStr(),snap:snapshotTeams(),orangeScore:'',greenScore:'',memo:''};
+  const mt={id:uid(),at:Date.now(),date:todayStr(),snap:snapshotTeams(),orangeScore:'',greenScore:'',memo:'',momId:'',momName:''};
   matches.unshift(mt); saveMatches(); fbSaveMatch(mt); toast('경기를 등록했습니다 📋 (경기 결과 탭에서 점수 입력)');
 }
 const expandedMatches=new Set();
 function scoreDisp(v){ return (v===''||v==null)?'-':v; }
-function rosterHtml(s,k){
+function crown(p,momId){ return (p&&momId&&p.id===momId)?' 👑':''; }
+function rosterHtml(s,k,momId){
   const t=s[k]; let html=`<div class="mr-col"><h4 style="color:${t.color}">${t.name}</h4>`;
   ['GK','DF','MF','FW'].forEach(pos=>{ (t.rows[pos]||[]).forEach((p,i)=>{ if(p)
-    html+=`<div class="mr-p"><span class="mr-pos" style="background:${POS_COLORS[pos]}">${slotLabel(pos,t.rows[pos].length,i)}</span>${p.name}</div>`; }); });
-  const bench=t.bench||[]; if(bench.length) html+=`<div class="mr-bench">후보 · ${bench.map(p=>p.name).join(', ')}</div>`;
+    html+=`<div class="mr-p"><span class="mr-pos" style="background:${POS_COLORS[pos]}">${slotLabel(pos,t.rows[pos].length,i)}</span>${p.name}${crown(p,momId)}</div>`; }); });
+  const bench=t.bench||[]; if(bench.length) html+=`<div class="mr-bench">후보 · ${bench.map(p=>p.name+crown(p,momId)).join(', ')}</div>`;
   return html+'</div>';
 }
+function momOptions(s,sel){ let o='<option value="">— 선택 안 함 —</option>';
+  ['orange','green'].forEach(k=>{ const t=s[k];
+    ['GK','DF','MF','FW'].forEach(pos=>(t.rows[pos]||[]).forEach(p=>{ if(p) o+=`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.name} · ${t.name}</option>`; }));
+    (t.bench||[]).forEach(p=>{ o+=`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.name} · 후보</option>`; });
+  });
+  return o;
+}
+function updMatchMom(id,pid){ if(!requireAdmin())return; const m=matches.find(x=>x.id===id); if(!m)return;
+  let name=''; if(pid){ const s=m.snap; ['orange','green'].forEach(k=>{ POS_LIST.forEach(pos=>(s[k].rows[pos]||[]).forEach(p=>{ if(p&&p.id===pid)name=p.name; })); (s[k].bench||[]).forEach(p=>{ if(p.id===pid)name=p.name; }); }); }
+  m.momId=pid; m.momName=name; saveMatches(); fbSaveMatch(m); renderMatchDetail(id); }
 function renderMatches(){
   const box=document.getElementById('matchList');
   document.getElementById('matchCount').textContent=matches.length?`${matches.length}경기`:'';
@@ -1513,7 +1547,7 @@ function toggleMatch(id){
 }
 function renderMatchDetail(id){
   const mt=matches.find(x=>x.id===id); if(!mt)return; const s=mt.snap, ed=canEdit();
-  let html=`<div class="match-rosters" style="margin-top:12px">${rosterHtml(s,'orange')}${rosterHtml(s,'green')}</div>`;
+  let html=`<div class="match-rosters" style="margin-top:12px">${rosterHtml(s,'orange',mt.momId)}${rosterHtml(s,'green',mt.momId)}</div>`;
   if(ed){
     html+=`<div class="match-edit">
       <label class="fld">날짜</label>
@@ -1526,10 +1560,15 @@ function renderMatchDetail(id){
         <input class="ms-in" type="number" min="0" value="${mt.greenScore}" onchange="updMatch('${id}','greenScore',this.value)">
         <span class="se-team" style="color:${s.green.color}">${s.green.name}</span>
       </div>
+      <label class="fld">👑 MOM (경기 최우수 선수)</label>
+      <select onchange="updMatchMom('${id}',this.value)">${momOptions(s,mt.momId)}</select>
       <label class="fld">메모</label>
-      <input type="text" value="${(mt.memo||'').replace(/"/g,'&quot;')}" placeholder="예) 오렌지 홍길동 2골, MOM 김철수" onchange="updMatch('${id}','memo',this.value)">
+      <input type="text" value="${(mt.memo||'').replace(/"/g,'&quot;')}" placeholder="예) 오렌지 홍길동 2골" onchange="updMatch('${id}','memo',this.value)">
     </div>`;
-  } else if(mt.memo){ html+=`<div class="match-memo">📝 ${mt.memo}</div>`; }
+  } else {
+    if(mt.momName) html+=`<div class="match-memo">👑 MOM · <b>${mt.momName}</b></div>`;
+    if(mt.memo) html+=`<div class="match-memo">📝 ${mt.memo}</div>`;
+  }
   html+=`<div class="modal-sub" style="margin-top:14px">📷 사진 · 영상 갤러리</div>
     <div class="gallery" id="gal_${id}"><span class="muted" style="font-size:12px">불러오는 중...</span></div>
     <div class="gallery-add">
