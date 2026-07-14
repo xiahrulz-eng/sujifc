@@ -309,10 +309,30 @@
     border-radius:var(--r); background:var(--c-low); border:1px solid var(--outline-v); margin-bottom:7px;}
   .admin-row b{font-family:var(--f-head); font-weight:600; font-size:14px;}
   .admin-row .ar-btns{display:flex; gap:6px; flex-shrink:0;}
+  /* 로그인 게이트 (전체화면 시작 화면) */
+  #authGate{position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:24px;
+    background:radial-gradient(1000px 600px at 50% 0%, rgba(46,74,125,.35), transparent 60%),
+      linear-gradient(180deg, #1e3157, #0d1526 70%);}
+  .gate-box{width:100%; max-width:360px; display:flex; flex-direction:column; align-items:center;}
+  .gate-logo{width:88px; height:88px; border-radius:22px; display:grid; place-items:center; margin-bottom:14px;
+    background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); box-shadow:inset 1px 1px 0 rgba(168,178,193,.3), 0 12px 34px rgba(0,0,0,.5);}
+  .gate-logo img{width:56px; height:56px; object-fit:contain;}
+  .gate-brand{font-family:var(--f-head); font-weight:700; font-size:30px; letter-spacing:-.02em; color:#fff;}
+  .gate-brand span{color:var(--primary);}
+  .gate-tag{font-family:var(--f-label); font-size:12px; letter-spacing:.06em; color:var(--on-var); margin:4px 0 26px;}
+  .gate-box #gateForm, .gate-box #gatePending{width:100%; background:linear-gradient(180deg,rgba(30,37,47,.72),rgba(17,19,23,.78));
+    border:1px solid rgba(168,178,193,.28); border-radius:var(--r-xl); padding:22px; backdrop-filter:blur(10px);
+    box-shadow:0 20px 50px rgba(0,0,0,.45), inset 1px 1px 0 rgba(168,178,193,.18);}
+  .gate-h{font-family:var(--f-head); font-weight:600; font-size:19px; margin:0 0 16px; text-align:center; color:var(--on);}
+  .gate-msg{text-align:center; font-size:14px; line-height:1.7; color:var(--on); margin:4px 0 18px;}
+  .gate-links{display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin-top:16px; font-size:13px;}
+  .gate-links a{cursor:pointer; color:var(--primary); font-weight:600;}
+  .gate-links #findPw{color:var(--on-var); font-weight:500;}
+  .gate-links a:hover{text-decoration:underline;}
+  .gate-links .sep{color:var(--outline);}
   .login-opts{display:flex; gap:18px; margin-top:12px;}
   .chk{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--on-var); cursor:pointer;}
   .chk input{accent-color:var(--primary); width:15px; height:15px;}
-  #findPw:hover, #modeToggle:hover{text-decoration:underline;}
   /* 경기 결과 접기/펼치기 + 갤러리 */
   .match-item{background:var(--c-low); border:1px solid var(--outline-v); border-radius:var(--r-md); margin-bottom:8px; overflow:hidden;}
   .match-line{display:flex; align-items:center; gap:10px; padding:11px 13px; cursor:pointer; transition:.12s;}
@@ -396,6 +416,44 @@
 </style>
 </head>
 <body>
+<!-- ================= 로그인 게이트 (앱 시작 화면) ================= -->
+<div id="authGate">
+  <div class="gate-box">
+    <div class="gate-logo"><img src="logo-mark.png" alt="수지FC"></div>
+    <div class="gate-brand">수지<span>FC</span></div>
+    <div class="gate-tag">조기축구 라인업 매니저</div>
+    <div id="gatePending" style="display:none;">
+      <p class="gate-msg">✅ 가입 신청이 접수되었습니다.<br>관리자 승인 후 이용할 수 있습니다.</p>
+      <button class="btn ghost" style="width:100%; margin-bottom:8px;" onclick="location.reload()">🔄 승인됐어요 (새로고침)</button>
+      <button class="btn ghost" style="width:100%;" onclick="doSignOut()">로그아웃</button>
+    </div>
+    <div id="gateForm">
+      <h3 id="loginTitle" class="gate-h">로그인</h3>
+      <div id="signupNameWrap" style="display:none;">
+        <label class="fld">이름</label>
+        <input type="text" id="signupName" placeholder="이름" maxlength="10">
+      </div>
+      <label class="fld">이메일</label>
+      <input type="email" id="loginEmail" placeholder="name@example.com" autocomplete="username">
+      <label class="fld">비밀번호</label>
+      <input type="password" id="loginPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
+      <div id="loginExtras" class="login-opts">
+        <label class="chk"><input type="checkbox" id="saveId">아이디 저장</label>
+        <label class="chk"><input type="checkbox" id="savePw">비밀번호 저장</label>
+      </div>
+      <button class="btn primary" id="loginSubmit" style="width:100%; margin-top:16px; padding:13px;" onclick="doLoginOrSignup()">로그인</button>
+      <div class="gate-links">
+        <a id="findPw" onclick="resetPw()">비밀번호 찾기</a>
+        <span id="signupLinks">
+          <a onclick="setAuthMode('signup-member')">일반회원 신청</a>
+          <span class="sep">·</span>
+          <a onclick="setAuthMode('signup-admin')">운영진 신청</a>
+        </span>
+        <a id="backToLogin" style="display:none;" onclick="setAuthMode('login')">← 로그인으로 돌아가기</a>
+      </div>
+    </div>
+  </div>
+</div>
 <header>
   <div class="logo"><span class="mk"><img src="logo-mark.png" alt="수지FC" style="width:23px;height:23px;object-fit:contain;"></span>수지<span style="color:var(--primary)">FC</span></div>
   <div class="tabs">
@@ -403,6 +461,7 @@
     <button id="tab-roster" onclick="showView('roster')">선수 명단</button>
     <button id="tab-match" onclick="showView('match')">경기 결과</button>
     <button id="tab-stats" onclick="showView('stats')">개인 기록</button>
+    <button id="tab-fee" class="admin-only" onclick="showView('fee')">회비 관리</button>
   </div>
   <span class="spacer" id="authInfo"></span>
   <button id="adminManageBtn" class="btn sm" style="display:none;" onclick="openAdminManage()">운영진 관리</button>
@@ -540,35 +599,16 @@
   </div>
 </div>
 
+<!-- ================= FEE VIEW (운영진 전용) ================= -->
+<div class="view" id="view-fee">
+  <div class="card">
+    <h2 class="sec">💰 회비 납부 관리</h2>
+    <div class="empty">🚧 추후 업데이트 예정입니다.</div>
+  </div>
+</div>
+
 <!-- history modal -->
 <div class="overlay" id="histOverlay"><div class="modal wide" id="histBody"></div></div>
-
-<!-- login / signup modal -->
-<div class="overlay" id="loginOverlay"><div class="modal">
-  <h3 id="loginTitle">🔒 운영진 로그인</h3>
-  <p class="muted" id="loginHint" style="font-size:12px; text-align:center; margin:0 0 16px;">명단·사진·기록을 수정하려면 로그인하세요.</p>
-  <div id="signupNameWrap" style="display:none;">
-    <label class="fld">이름</label>
-    <input type="text" id="signupName" placeholder="이름" maxlength="10">
-  </div>
-  <label class="fld">이메일</label>
-  <input type="email" id="loginEmail" placeholder="name@example.com" autocomplete="username">
-  <label class="fld">비밀번호</label>
-  <input type="password" id="loginPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
-  <div id="loginExtras" class="login-opts">
-    <label class="chk"><input type="checkbox" id="saveId">아이디 저장</label>
-    <label class="chk"><input type="checkbox" id="savePw">비밀번호 저장</label>
-  </div>
-  <div class="modal-btns">
-    <button class="btn primary" id="loginSubmit" style="flex:1;" onclick="doLoginOrSignup()">로그인</button>
-    <button class="btn ghost" style="flex:1;" onclick="closeLogin()">취소</button>
-  </div>
-  <div style="text-align:center; margin-top:14px; font-size:13px;">
-    <a id="findPw" onclick="resetPw()" style="cursor:pointer; color:var(--on-var);">비밀번호 찾기</a>
-    <span id="linkSep" style="color:var(--outline);"> · </span>
-    <a id="modeToggle" onclick="toggleAuthMode()" style="cursor:pointer; color:var(--primary); font-weight:600;">운영진으로 가입 신청하기 →</a>
-  </div>
-</div></div>
 
 <!-- admin management modal -->
 <div class="overlay" id="adminOverlay"><div class="modal wide" id="adminBody"></div></div>
@@ -681,11 +721,12 @@ let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
 
 /* ============ Firebase 연동 (실시간 동기화 · 운영진 편집) ============ */
-let FB=null, FBauth=null, FBstorage=null, isAdmin=false, currentUser=null, attendMap={}, authMode='login';
+let FB=null, FBauth=null, FBstorage=null, isAdmin=false, currentUser=null, attendMap={}, authMode='login', role='none';
 let teamConfig={orange:{name:'오렌지 팀',color:'#ff8a2b'},green:{name:'그린 팀',color:'#3ddc84'}};
-function canEdit(){ return !FB || isAdmin; }
+function canEdit(){ return isAdmin; }
+function canView(){ return role==='admin'||role==='member'; }
 function loadTeamConfig(){ const r=localStorage.getItem('suziFC_teams'); if(r){try{const d=JSON.parse(r); if(d&&d.orange&&d.green)teamConfig=d;}catch(e){}} }
-function subscribeTeamConfig(){ FB.collection('settings').doc('teams').onSnapshot(doc=>{ if(doc.exists){ const d=doc.data(); if(d&&d.orange&&d.green){ teamConfig=d; localStorage.setItem('suziFC_teams',JSON.stringify(teamConfig)); applyTeamConfig(); } } }, e=>console.error(e)); }
+function subscribeTeamConfig(){ teamCfgUnsub=FB.collection('settings').doc('teams').onSnapshot(doc=>{ if(doc.exists){ const d=doc.data(); if(d&&d.orange&&d.green){ teamConfig=d; localStorage.setItem('suziFC_teams',JSON.stringify(teamConfig)); applyTeamConfig(); } } }, e=>console.error(e)); }
 function applyTeamConfig(){ if(lastTeams){ lastTeams.orange.name=teamConfig.orange.name; lastTeams.orange.color=teamConfig.orange.color; lastTeams.green.name=teamConfig.green.name; lastTeams.green.color=teamConfig.green.color; renderResult(); } }
 function openTeamCfg(){ if(!requireAdmin())return;
   document.getElementById('t1name').value=teamConfig.orange.name; document.getElementById('t1color').value=teamConfig.orange.color;
@@ -705,24 +746,41 @@ function applyAttendToMembers(){ members.forEach(m=>{ if(attendMap[m.id]!==undef
 function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,skill:m.skill,photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},order:(m.order!==undefined?m.order:(i||0))}; }
 function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||'',momId:mt.momId||'',momName:mt.momName||''}; }
 function initFirebase(){
-  if(!window.firebase || !window.SUJI_FIREBASE_CONFIG) return false;
+  if(!window.firebase || !window.SUJI_FIREBASE_CONFIG){ document.getElementById('gateBody').innerHTML='<p class="gate-msg">앱을 불러오지 못했습니다.<br>인터넷 연결 후 새로고침 해주세요.</p>'; return false; }
   try{
     firebase.initializeApp(window.SUJI_FIREBASE_CONFIG);
     FB=firebase.firestore(); FBauth=firebase.auth();
     try{ FBstorage=firebase.storage(); }catch(e){ FBstorage=null; }
-    FBauth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{}); // 자동 로그인(세션 유지)
+    FBauth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
     FB.enablePersistence({synchronizeTabs:true}).catch(()=>{});
     FBauth.onAuthStateChanged(u=>{ currentUser=u;
-      if(u){ FB.collection('admins').doc(u.uid).get().then(doc=>{ isAdmin=doc.exists; updateAdminUI();
-        if(isAdmin){ maybeSeed(); requestNotifPermission(); subscribeAdminRequests(); } else unsubAdminRequests();
-      }).catch(()=>{ isAdmin=false; updateAdminUI(); }); }
-      else { isAdmin=false; unsubAdminRequests(); updateAdminUI(); } });
-    subscribeRoster(); subscribeMatches(); subscribeTeamConfig();
+      if(!u){ role='none'; isAdmin=false; onRoleResolved(); return; }
+      Promise.all([FB.collection('admins').doc(u.uid).get(), FB.collection('members').doc(u.uid).get()])
+        .then(([a,m])=>{ role = a.exists?'admin':(m.exists?'member':'pending'); isAdmin=(role==='admin'); onRoleResolved(); })
+        .catch(()=>{ role='pending'; isAdmin=false; onRoleResolved(); });
+    });
     return true;
   }catch(e){ console.error('Firebase init 실패',e); FB=null; return false; }
 }
+/* 로그인 게이트 표시/숨김 + 데이터 리스너 제어 */
+let dataStarted=false, rosterUnsub=null, matchesUnsub=null, teamCfgUnsub=null;
+function onRoleResolved(){
+  const view=canView();
+  document.getElementById('authGate').style.display = view?'none':'flex';
+  document.getElementById('gatePending').style.display = (currentUser && role==='pending')?'':'none';
+  document.getElementById('gateForm').style.display = (currentUser && role==='pending')?'none':'';
+  if(!currentUser) renderAuthMode();
+  if(view){ startData(); updateAdminUI(); if(isAdmin){ maybeSeed(); requestNotifPermission(); subscribeRequests(); } else unsubRequests(); }
+  else { stopData(); unsubRequests(); updateAdminUI(); }
+}
+function startData(){ if(dataStarted||!FB)return; dataStarted=true; subscribeRoster(); subscribeMatches(); subscribeTeamConfig(); }
+function stopData(){ dataStarted=false;
+  if(rosterUnsub){try{rosterUnsub();}catch(e){} rosterUnsub=null;}
+  if(matchesUnsub){try{matchesUnsub();}catch(e){} matchesUnsub=null;}
+  if(teamCfgUnsub){try{teamCfgUnsub();}catch(e){} teamCfgUnsub=null;} }
+function doSignOut(){ if(FBauth) FBauth.signOut(); toast('로그아웃되었습니다'); }
 function subscribeRoster(){
-  FB.collection('roster').onSnapshot(snap=>{
+  rosterUnsub=FB.collection('roster').onSnapshot(snap=>{
     if(snap.empty) return;
     const arr=[];
     snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,name:d.name,age:(d.age??null),position:d.position||'MF',skill:d.skill||'중',photo:d.photo||null,stats:d.stats||{...EMPTY_STATS},order:(d.order??0),attend:(attendMap[doc.id]!==undefined?attendMap[doc.id]:true)}); });
@@ -733,7 +791,7 @@ function subscribeRoster(){
   }, err=>console.error('roster onSnapshot',err));
 }
 function subscribeMatches(){
-  FB.collection('matches').onSnapshot(snap=>{
+  matchesUnsub=FB.collection('matches').onSnapshot(snap=>{
     const arr=[];
     snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,at:d.at||0,date:d.date||'',snap:d.snap,orangeScore:(d.orangeScore??''),greenScore:(d.greenScore??''),memo:d.memo||'',momId:d.momId||'',momName:d.momName||''}); });
     arr.sort((a,b)=>b.at-a.at);
@@ -748,20 +806,18 @@ function fbReplaceRoster(list){ if(!FB||!isAdmin) return; FB.collection('roster'
 function fbSaveMatch(mt){ if(!FB||!isAdmin||!mt) return; FB.collection('matches').doc(mt.id).set(matchDoc(mt)).catch(e=>console.error(e)); }
 function fbDeleteMatch(id){ if(!FB||!isAdmin) return; FB.collection('matches').doc(id).delete().catch(e=>console.error(e)); }
 function updateAdminUI(){
-  document.body.classList.toggle('admin',canEdit());
+  document.body.classList.toggle('admin',isAdmin);
   const btn=document.getElementById('authBtn'), info=document.getElementById('authInfo'), mng=document.getElementById('adminManageBtn');
-  if(FB){
-    btn.style.display='';
-    if(!currentUser){ btn.textContent='운영진 로그인'; info.textContent=''; }
-    else if(isAdmin){ btn.textContent='로그아웃'; info.textContent='● 운영진 모드'; }
-    else { btn.textContent='로그아웃'; info.textContent='승인 대기 중'; }
+  if(currentUser && canView()){
+    btn.style.display=''; btn.textContent='로그아웃';
+    info.textContent = isAdmin?'● 운영진':'● 회원';
     mng.style.display=isAdmin?'':'none';
   } else { btn.style.display='none'; info.textContent=''; mng.style.display='none'; }
   renderRoster();
   if(document.getElementById('view-stats').classList.contains('on')) renderStats();
   if(document.getElementById('view-match').classList.contains('on')) renderMatches();
 }
-function authClick(){ if(!FB) return; if(currentUser){ FBauth.signOut(); toast('로그아웃되었습니다'); } else openLogin(); }
+function authClick(){ doSignOut(); }
 function loadLoginPrefs(){
   const sid=localStorage.getItem('suziFC_saveId')==='1', spw=localStorage.getItem('suziFC_savePw')==='1';
   document.getElementById('saveId').checked=sid; document.getElementById('savePw').checked=spw;
@@ -774,87 +830,99 @@ function saveLoginPrefs(em,pw){
   if(sid) localStorage.setItem('suziFC_savedEmail',em); else localStorage.removeItem('suziFC_savedEmail');
   if(spw) localStorage.setItem('suziFC_savedPw',pw); else localStorage.removeItem('suziFC_savedPw');
 }
-function openLogin(){ authMode='login'; renderAuthMode();
-  document.getElementById('signupName').value=''; loadLoginPrefs();
-  document.getElementById('loginOverlay').classList.add('on'); }
-function closeLogin(){ document.getElementById('loginOverlay').classList.remove('on'); }
+function setAuthMode(m){ authMode=m; renderAuthMode(); }
 function renderAuthMode(){
-  const s=authMode==='signup';
-  document.getElementById('loginTitle').textContent=s?'📝 운영진 가입 신청':'🔒 운영진 로그인';
-  document.getElementById('loginHint').textContent=s?'가입 후 관리자 승인을 받으면 편집할 수 있습니다.':'한 번 로그인하면 로그아웃 전까지 자동 로그인됩니다.';
-  document.getElementById('signupNameWrap').style.display=s?'':'none';
-  document.getElementById('loginExtras').style.display=s?'none':'flex';
-  document.getElementById('findPw').style.display=s?'none':'';
-  document.getElementById('linkSep').style.display=s?'none':'';
-  document.getElementById('loginSubmit').textContent=s?'가입 신청':'로그인';
-  document.getElementById('modeToggle').textContent=s?'← 로그인으로 돌아가기':'운영진으로 가입 신청하기 →';
+  const s=(authMode!=='login');
+  const t = authMode==='signup-admin' ? '운영진 가입 신청' : authMode==='signup-member' ? '일반회원 가입 신청' : '로그인';
+  const el=id=>document.getElementById(id);
+  if(!el('loginTitle')) return;
+  el('loginTitle').textContent=t;
+  el('signupNameWrap').style.display=s?'':'none';
+  el('loginExtras').style.display=s?'none':'flex';
+  el('loginSubmit').textContent=t;
+  el('findPw').style.display=s?'none':'';
+  el('signupLinks').style.display=s?'none':'';
+  el('backToLogin').style.display=s?'':'none';
+  el('signupName').value = s?el('signupName').value:'';
+  if(!s) loadLoginPrefs();
 }
 function resetPw(){ const em=document.getElementById('loginEmail').value.trim();
   if(!em){ toast('가입한 이메일을 입력한 뒤 눌러주세요'); return; }
   FBauth.sendPasswordResetEmail(em).then(()=>toast('비밀번호 재설정 메일을 보냈습니다 📧 (메일함 확인)')).catch(e=>{ console.error(e); toast('메일 전송 실패: '+authErr(e)); }); }
-function toggleAuthMode(){ authMode=authMode==='signup'?'login':'signup'; renderAuthMode(); }
 function authErr(e){ const c=e&&e.code||''; if(c==='auth/email-already-in-use')return '이미 가입된 이메일입니다'; if(c==='auth/invalid-email')return '이메일 형식이 올바르지 않습니다'; if(c==='auth/weak-password')return '비밀번호는 6자 이상이어야 합니다'; if(c==='auth/wrong-password'||c==='auth/invalid-credential')return '이메일 또는 비밀번호가 올바르지 않습니다'; if(c==='auth/user-not-found')return '가입되지 않은 이메일입니다'; return '다시 시도해주세요'; }
 function doLoginOrSignup(){
   const em=document.getElementById('loginEmail').value.trim(), pw=document.getElementById('loginPw').value;
   if(!em||!pw){ toast('이메일과 비밀번호를 입력하세요'); return; }
-  if(authMode==='signup'){
+  if(authMode!=='login'){
     const name=document.getElementById('signupName').value.trim();
     if(!name){ toast('이름을 입력하세요'); return; }
     if(pw.length<6){ toast('비밀번호는 6자 이상이어야 합니다'); return; }
+    const type = authMode==='signup-admin' ? 'admin' : 'member';
     FBauth.createUserWithEmailAndPassword(em,pw)
-      .then(cred=>FB.collection('adminRequests').doc(cred.user.uid).set({name,email:em,at:Date.now()}))
-      .then(()=>{ closeLogin(); toast('운영진 가입 신청 완료! 관리자 승인을 기다려주세요 📝'); })
+      .then(cred=>FB.collection('requests').doc(cred.user.uid).set({name,email:em,type,at:Date.now()}))
+      .then(()=>{ toast((type==='admin'?'운영진':'일반회원')+' 가입 신청 완료! 관리자 승인을 기다려주세요 📝'); setAuthMode('login'); })
       .catch(e=>{ console.error(e); toast('가입 실패: '+authErr(e)); });
   } else {
-    FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ saveLoginPrefs(em,pw); closeLogin(); toast('로그인 성공 ✅'); }).catch(e=>{ console.error(e); toast('로그인 실패: '+authErr(e)); });
+    FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ saveLoginPrefs(em,pw); }).catch(e=>{ console.error(e); toast('로그인 실패: '+authErr(e)); });
   }
 }
-/* 운영진 관리 (승인/거절/제거) */
+/* 회원/운영진 관리 (승인·거절·제거·승격) */
 function openAdminManage(){
   if(!FB||!isAdmin){ toast('운영진만 사용할 수 있습니다'); return; }
   const body=document.getElementById('adminBody');
-  body.innerHTML='<h3>👥 운영진 관리</h3><p class="muted" style="font-size:12px;text-align:center;padding:16px 0;">불러오는 중...</p>';
+  body.innerHTML='<h3>👥 회원·운영진 관리</h3><p class="muted" style="font-size:12px;text-align:center;padding:16px 0;">불러오는 중...</p>';
   document.getElementById('adminOverlay').classList.add('on');
-  Promise.all([FB.collection('adminRequests').get(), FB.collection('admins').get()]).then(([reqs,admins])=>{
-    let html='<h3>👥 운영진 관리</h3>';
+  Promise.all([FB.collection('requests').get(), FB.collection('admins').get(), FB.collection('members').get()]).then(([reqs,admins,members])=>{
+    const esc=s=>(s||'').replace(/'/g,"\\'");
+    let html='<h3>👥 회원·운영진 관리</h3>';
     if('Notification' in window && Notification.permission!=='granted') html+=`<button class="btn ghost sm" style="width:100%; margin-bottom:12px;" onclick="requestNotifPermission()">🔔 신청 알림 켜기</button>`;
     html+='<div class="modal-sub">🕓 승인 대기</div>';
     if(reqs.empty) html+='<p class="muted" style="font-size:12px;margin:0 0 8px;">대기 중인 신청이 없습니다.</p>';
-    else reqs.forEach(d=>{ const r=d.data(), nm=(r.name||'').replace(/'/g,"\\'"), em=(r.email||'').replace(/'/g,"\\'");
-      html+=`<div class="admin-row"><div style="min-width:0"><b>${r.name||'(이름없음)'}</b><div class="muted" style="font-size:11px">${r.email||''}</div></div>
-        <div class="ar-btns"><button class="btn primary sm" onclick="approveReq('${d.id}','${nm}','${em}')">승인</button>
+    else reqs.forEach(d=>{ const r=d.data(), tp=r.type==='admin'?'운영진':'일반회원';
+      html+=`<div class="admin-row"><div style="min-width:0"><b>${r.name||'(이름없음)'}</b> <span class="badge skill" style="font-size:10px">${tp}</span><div class="muted" style="font-size:11px">${r.email||''}</div></div>
+        <div class="ar-btns"><button class="btn primary sm" onclick="approveReq('${d.id}','${esc(r.name)}','${esc(r.email)}','${r.type||'member'}')">승인</button>
         <button class="btn ghost sm" onclick="rejectReq('${d.id}')">거절</button></div></div>`; });
-    html+='<div class="modal-sub" style="margin-top:16px">✅ 현재 운영진</div>';
+    html+='<div class="modal-sub" style="margin-top:16px">✅ 운영진</div>';
     admins.forEach(d=>{ const a=d.data(), me=(currentUser&&d.id===currentUser.uid);
       html+=`<div class="admin-row"><div style="min-width:0"><b>${a.name||a.email||'운영진'}</b>${me?' <span style="color:var(--tertiary);font-size:11px">(나)</span>':''}<div class="muted" style="font-size:11px">${a.email||''}</div></div>
         ${me?'':`<div class="ar-btns"><button class="btn ghost sm" onclick="removeAdmin('${d.id}')">제거</button></div>`}</div>`; });
+    html+=`<div class="modal-sub" style="margin-top:16px">👤 일반회원 (${members.size}명)</div>`;
+    if(members.empty) html+='<p class="muted" style="font-size:12px;margin:0 0 8px;">회원이 없습니다.</p>';
+    else members.forEach(d=>{ const m=d.data();
+      html+=`<div class="admin-row"><div style="min-width:0"><b>${m.name||m.email||'회원'}</b><div class="muted" style="font-size:11px">${m.email||''}</div></div>
+        <div class="ar-btns"><button class="btn ghost sm" onclick="promoteMember('${d.id}','${esc(m.name)}','${esc(m.email)}')">운영진↑</button>
+        <button class="btn ghost sm" onclick="removeMember('${d.id}')">제거</button></div></div>`; });
     html+='<div class="modal-btns"><button class="btn ghost" style="flex:1" onclick="closeAdminManage()">닫기</button></div>';
     body.innerHTML=html;
-  }).catch(e=>{ console.error(e); body.innerHTML='<h3>👥 운영진 관리</h3><p class="muted" style="text-align:center;padding:16px 0;">불러오기 실패</p><div class="modal-btns"><button class="btn ghost" style="flex:1" onclick="closeAdminManage()">닫기</button></div>'; });
+  }).catch(e=>{ console.error(e); body.innerHTML='<h3>👥 회원·운영진 관리</h3><p class="muted" style="text-align:center;padding:16px 0;">불러오기 실패</p><div class="modal-btns"><button class="btn ghost" style="flex:1" onclick="closeAdminManage()">닫기</button></div>'; });
 }
 function closeAdminManage(){ document.getElementById('adminOverlay').classList.remove('on'); }
-function approveReq(uid,name,email){ FB.collection('admins').doc(uid).set({name,email,at:Date.now()})
-  .then(()=>FB.collection('adminRequests').doc(uid).delete()).then(()=>{ toast('승인 완료 ✅'); openAdminManage(); }).catch(e=>{ console.error(e); toast('승인 실패'); }); }
-function rejectReq(uid){ FB.collection('adminRequests').doc(uid).delete().then(()=>{ toast('신청을 거절했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
+function approveReq(uid,name,email,type){ const coll=(type==='admin')?'admins':'members';
+  FB.collection(coll).doc(uid).set({name,email,at:Date.now()})
+  .then(()=>FB.collection('requests').doc(uid).delete()).then(()=>{ toast('승인 완료 ✅'); openAdminManage(); }).catch(e=>{ console.error(e); toast('승인 실패'); }); }
+function rejectReq(uid){ FB.collection('requests').doc(uid).delete().then(()=>{ toast('신청을 거절했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
 function removeAdmin(uid){ if(!confirm('이 운영진 권한을 제거할까요?'))return; FB.collection('admins').doc(uid).delete().then(()=>{ toast('운영진에서 제거했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
-/* 운영진 신청 알림 (앱이 열려있거나 백그라운드 상태일 때 팝업) */
-let adminReqUnsub=null, adminReqInit=false;
+function removeMember(uid){ if(!confirm('이 회원을 제거할까요? (앱 접근 불가)'))return; FB.collection('members').doc(uid).delete().then(()=>{ toast('회원을 제거했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
+function promoteMember(uid,name,email){ if(!confirm('이 회원을 운영진으로 승격할까요?'))return;
+  FB.collection('admins').doc(uid).set({name,email,at:Date.now()}).then(()=>FB.collection('members').doc(uid).delete()).then(()=>{ toast('운영진으로 승격했습니다 ⬆️'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
+/* 가입 신청 알림 (앱이 열려있거나 백그라운드 상태일 때 팝업) */
+let reqUnsub=null, reqInit=false;
 function requestNotifPermission(){ try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission().catch(()=>{}); }catch(e){} }
 function notifyAdmin(title,body){
   toast('🔔 '+body);
   try{ if('Notification' in window && Notification.permission==='granted'){
     if(navigator.serviceWorker && navigator.serviceWorker.ready){
-      navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,{body,icon:'icon-192.png',badge:'icon-192.png',tag:'suji-adminreq'})).catch(()=>{ try{new Notification(title,{body,icon:'icon-192.png'});}catch(_){}}); }
+      navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,{body,icon:'icon-192.png',badge:'icon-192.png',tag:'suji-req'})).catch(()=>{ try{new Notification(title,{body,icon:'icon-192.png'});}catch(_){}}); }
     else { try{ new Notification(title,{body,icon:'icon-192.png'}); }catch(_){}}
   } }catch(e){}
 }
-function subscribeAdminRequests(){ if(adminReqUnsub||!FB)return; adminReqInit=false;
-  adminReqUnsub=FB.collection('adminRequests').onSnapshot(snap=>{
-    if(!adminReqInit){ adminReqInit=true; return; } // 최초 로딩분은 알림 제외
-    snap.docChanges().forEach(ch=>{ if(ch.type==='added'){ const r=ch.doc.data(); notifyAdmin('수지FC 운영진 신청', (r.name||'익명')+' 님이 운영진 가입을 신청했습니다'); } });
-  }, e=>console.error('adminReq',e));
+function subscribeRequests(){ if(reqUnsub||!FB)return; reqInit=false;
+  reqUnsub=FB.collection('requests').onSnapshot(snap=>{
+    if(!reqInit){ reqInit=true; return; }
+    snap.docChanges().forEach(ch=>{ if(ch.type==='added'){ const r=ch.doc.data(); notifyAdmin('수지FC 가입 신청', (r.name||'익명')+' 님이 '+(r.type==='admin'?'운영진':'일반회원')+' 가입을 신청했습니다'); } });
+  }, e=>console.error('requests',e));
 }
-function unsubAdminRequests(){ if(adminReqUnsub){ try{adminReqUnsub();}catch(e){} adminReqUnsub=null; adminReqInit=false; } }
+function unsubRequests(){ if(reqUnsub){ try{reqUnsub();}catch(e){} reqUnsub=null; reqInit=false; } }
 function compressImage(src,cb,maxArg){
   const img=new Image();
   img.onload=()=>{ const max=maxArg||340; let w=img.width,h=img.height;
@@ -943,7 +1011,7 @@ function renderGuests(){
 function showView(v){
   document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
   document.getElementById('view-'+v).classList.add('on');
-  ['lineup','roster','match','stats'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('active',v===t));
+  ['lineup','roster','match','stats','fee'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('active',v===t));
   if(v==='lineup') renderSummary();
   if(v==='match') renderMatches();
   if(v==='stats') renderStats();
@@ -1229,8 +1297,9 @@ function drawPosBadge(ctx,x,y,text,color){
   ctx.fillStyle='#0c0e11'; ctx.fillText(text,x,y+1);
 }
 function drawCard(ctx,x,y,p,accent){
-  const box=84, half=box/2;
-  const img=(p&&p.photo)?getImg(p.photo):getImg(DEFAULT_PROFILE_SRC);
+  const hasPhoto=!!(p&&p.photo);
+  const box=hasPhoto?101:76, half=box/2;   // 사진 1.2배 / 기본 0.9배
+  const img=hasPhoto?getImg(p.photo):getImg(DEFAULT_PROFILE_SRC);
   if(img){ const s=Math.min(box/img.naturalWidth,box/img.naturalHeight),w=img.naturalWidth*s,h=img.naturalHeight*s;
     ctx.drawImage(img,x-w/2,y-h/2,w,h); }
   else if(p){ ctx.fillStyle='#fff';ctx.font='bold 24px "Space Grotesk",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
@@ -1256,7 +1325,7 @@ function drawTeam(canvas,team,key){
   order.forEach((pos,ri)=>{ const y=top+gap*ri+gap/2,arr=team.rows[pos];
     arr.forEach((p,ci)=>{ const x=CW*(ci+1)/(arr.length+1);
       drawCard(ctx,x,y,p,team.color);
-      drawPosBadge(ctx,x,y-54,slotLabel(pos,arr.length,ci),POS_COLORS[pos]);
+      drawPosBadge(ctx,x,y-((p&&p.photo)?60:52),slotLabel(pos,arr.length,ci),POS_COLORS[pos]);
       if(key) hitMap[key].push({x,y,r:48,ref:{team:key,type:'starter',pos,idx:ci}});
       if(key&&hoverRef&&hoverRef.team===key&&hoverRef.type==='starter'&&hoverRef.pos===pos&&hoverRef.idx===ci){
         ctx.beginPath();ctx.arc(x,y,50,0,Math.PI*2);ctx.lineWidth=4;ctx.strokeStyle='#fff';
@@ -1651,7 +1720,6 @@ document.getElementById('teamSize').addEventListener('change',renderSummary);
 document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeModal(); });
 document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target.id==='editOverlay')closeEditLineup(); });
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
-document.getElementById('loginOverlay').addEventListener('click',e=>{ if(e.target.id==='loginOverlay')closeLogin(); });
 document.getElementById('adminOverlay').addEventListener('click',e=>{ if(e.target.id==='adminOverlay')closeAdminManage(); });
 document.getElementById('loginPw').addEventListener('keydown',e=>{ if(e.key==='Enter')doLoginOrSignup(); });
 (function(){ const cc=document.getElementById('cropCanvas');
@@ -1667,6 +1735,8 @@ document.addEventListener('pointercancel',onDragEnd);
 /* 초기화 */
 load(); loadGuests(); loadMatches(); loadHistory(); loadAttend(); loadTeamConfig(); applyAttendToMembers();
 buildChips(); renderRoster(); renderGuests(); renderSummary();
+document.getElementById('authGate').style.display='flex';  // 인증 확인 전엔 로그인 화면
+renderAuthMode();
 initFirebase(); updateAdminUI();
 document.getElementById('teamOverlay').addEventListener('click',e=>{ if(e.target.id==='teamOverlay')closeTeamCfg(); });
 document.getElementById('lightbox').addEventListener('click',()=>document.getElementById('lightbox').classList.remove('on'));
