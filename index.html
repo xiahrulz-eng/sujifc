@@ -62,9 +62,9 @@
   .tabs{display:flex; gap:6px; background:var(--c-low); padding:5px; border-radius:var(--r-md);
     border:1px solid var(--outline-v); box-shadow:inset 0 1px 0 rgba(0,0,0,.4);}
   .tabs button{
-    font-family:var(--f-label); font-size:12px; font-weight:700; letter-spacing:.05em;
-    padding:9px 18px; border:none; border-radius:var(--r); background:transparent; color:var(--on-var);
-    cursor:pointer; transition:.18s;
+    font-family:var(--f-label); font-size:12px; font-weight:700; letter-spacing:.03em;
+    padding:9px 16px; border:none; border-radius:var(--r); background:transparent; color:var(--on-var);
+    cursor:pointer; transition:.18s; white-space:nowrap;
   }
   .tabs button.active{
     background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff;
@@ -84,6 +84,11 @@
   }
   h2.sec{font-family:var(--f-head); font-weight:600; font-size:18px; letter-spacing:-.01em; margin:0 0 16px; display:flex; align-items:center; gap:9px;}
   h2.sec .count{margin-left:auto; font-family:var(--f-label); font-size:11px; letter-spacing:.05em; color:var(--on-var); font-weight:600;}
+  .sec.toggle{cursor:pointer; user-select:none;}
+  .sec.toggle .count{margin-left:0;}
+  .sec .chev{margin-left:auto; color:var(--on-var); font-size:13px; transition:transform .2s;}
+  .card.collapsed .chev{transform:rotate(-90deg);}
+  .card.collapsed .card-body{display:none;}
   label.fld{display:block; font-family:var(--f-label); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--on-var); margin:14px 0 7px;}
 
   /* controls */
@@ -457,11 +462,11 @@
 <header>
   <div class="logo"><span class="mk"><img src="logo-mark.png" alt="수지FC" style="width:23px;height:23px;object-fit:contain;"></span>수지<span style="color:var(--primary)">FC</span></div>
   <div class="tabs">
-    <button id="tab-lineup" class="active" onclick="showView('lineup')">라인업 생성</button>
-    <button id="tab-roster" onclick="showView('roster')">선수 명단</button>
-    <button id="tab-match" onclick="showView('match')">경기 결과</button>
-    <button id="tab-stats" onclick="showView('stats')">개인 기록</button>
-    <button id="tab-fee" class="admin-only" onclick="showView('fee')">회비 관리</button>
+    <button id="tab-lineup" class="active" onclick="showView('lineup')">라인업</button>
+    <button id="tab-roster" onclick="showView('roster')">명단</button>
+    <button id="tab-match" onclick="showView('match')">경기</button>
+    <button id="tab-stats" onclick="showView('stats')">기록</button>
+    <button id="tab-fee" class="admin-only" onclick="showView('fee')">회비</button>
   </div>
   <span class="spacer" id="authInfo"></span>
   <button id="adminManageBtn" class="btn sm" style="display:none;" onclick="openAdminManage()">운영진 관리</button>
@@ -472,8 +477,9 @@
 <div class="view on" id="view-lineup">
   <div class="lineup-grid">
     <div>
-      <div class="card" style="margin-bottom:20px;">
-        <h2 class="sec">⚙️ 팀 생성 설정</h2>
+      <div class="card collapsible" id="card-setting" style="margin-bottom:16px;">
+        <h2 class="sec toggle" onclick="toggleCard('card-setting')">⚙️ 팀 생성 설정 <span class="chev">▾</span></h2>
+        <div class="card-body">
         <label class="fld">팀당 인원 (포메이션)</label>
         <select id="teamSize">
           <option value="5">5명 · 2-1-1</option>
@@ -496,10 +502,12 @@
             <div><div class="t">4. 포지션 + 실력</div><div class="d">포지션 균형 + 실력 최대한 유사</div></div></label>
         </div>
         <button class="btn ghost sm admin-only" style="width:100%; margin-top:12px;" onclick="openTeamCfg()">🎨 팀 이름·색상 설정</button>
+        </div>
       </div>
 
-      <div class="card" style="margin-bottom:20px;">
-        <h2 class="sec">🎽 게스트 추가 <span class="count" id="guestCount"></span></h2>
+      <div class="card collapsible collapsed" id="card-guest" style="margin-bottom:16px;">
+        <h2 class="sec toggle" onclick="toggleCard('card-guest')">🎽 게스트 추가 <span class="count" id="guestCount"></span> <span class="chev">▾</span></h2>
+        <div class="card-body">
         <div class="rowg">
           <div><label class="fld">포지션</label>
             <select id="gPos"><option>GK</option><option>DF</option><option selected>MF</option><option>FW</option></select></div>
@@ -510,10 +518,12 @@
         </div>
         <button class="btn sm" style="width:100%; margin-top:10px;" onclick="addGuests()">+ 게스트 추가</button>
         <div class="guest-list" id="guestList"></div>
+        </div>
       </div>
 
-      <div class="card">
-        <h2 class="sec">🧮 참석 현황</h2>
+      <div class="card collapsible" id="card-attend">
+        <h2 class="sec toggle" onclick="toggleCard('card-attend')">🧮 참석 현황 <span class="chev">▾</span></h2>
+        <div class="card-body">
         <div class="summary">
           <div class="stat"><div class="n" id="s-total">0</div><div class="l">회원 참석</div></div>
           <div class="stat"><div class="n" id="s-guest">0</div><div class="l">게스트</div></div>
@@ -522,6 +532,7 @@
         </div>
         <button class="btn ghost sm" style="width:100%; margin-top:12px;" onclick="showView('roster')">명단 관리로 이동 →</button>
         <button class="btn primary lg" style="margin-top:10px;" onclick="generate()">🎲 팀 생성하기</button>
+        </div>
       </div>
     </div>
 
@@ -534,7 +545,7 @@
         </span>
       </h2>
       <div id="result">
-        <div class="empty">왼쪽에서 설정 후 <b>팀 생성하기</b>를 눌러주세요.<br>오렌지 팀 / 그린 팀 라인업이 여기에 표시됩니다.</div>
+        <div class="empty">위쪽에서 설정 후 <b>팀 생성하기</b>를 눌러주세요.</div>
       </div>
     </div>
   </div>
@@ -1041,6 +1052,7 @@ function buildChips(){
 }
 function setFilter(key,val){ filter[key]=val; buildChips(); renderRoster(); }
 function toggleRosterTools(){ const el=document.getElementById('rosterTools'); el.style.display = (el.style.display==='none'||!el.style.display)?'inline-flex':'none'; }
+function toggleCard(id){ document.getElementById(id).classList.toggle('collapsed'); }
 
 /* ============ 명단 렌더 ============ */
 function filtered(){
