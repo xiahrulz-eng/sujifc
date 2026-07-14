@@ -607,8 +607,9 @@
         <button class="btn ghost sm admin-only" onclick="toggleRosterTools()">⚙️ 명단 도구</button>
         <span id="rosterTools" style="display:none;">
           <button class="btn ghost sm admin-only" onclick="downloadTemplate()">📄 양식</button>
-          <button class="btn ghost sm admin-only" onclick="document.getElementById('xlsInput').click()">⬆️ 불러오기</button>
+          <button class="btn ghost sm admin-only" onclick="document.getElementById('xlsInput').click()">⬆️ 업로드</button>
           <button class="btn ghost sm admin-only" onclick="exportRoster()">⬇️ 내보내기</button>
+          <button class="btn ghost sm admin-only" onclick="undoRoster()">↩️ 되돌리기</button>
         </span>
         <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none">
         <button class="btn primary sm admin-only" onclick="openAdd()">+ 선수 추가</button>
@@ -1188,7 +1189,13 @@ function renderSummary(){
 }
 function toggleAttend(id){ const m=members.find(x=>x.id===id); if(!m)return; m.attend=!m.attend; attendMap[id]=m.attend; saveAttend(); save(); renderRoster(); renderSummary(); }
 function toggleAll(v){ filtered().forEach(m=>{m.attend=v; attendMap[m.id]=v;}); saveAttend(); save(); renderRoster(); renderSummary(); }
-function delMember(id){ if(!requireAdmin())return; if(!confirm('이 선수를 삭제할까요?'))return; members=members.filter(m=>m.id!==id); save(); fbDeleteMember(id); renderRoster(); renderSummary(); }
+function delMember(id){ if(!requireAdmin())return; if(!confirm('이 선수를 삭제할까요?'))return; pushRosterUndo(); members=members.filter(m=>m.id!==id); save(); fbDeleteMember(id); renderRoster(); renderSummary(); }
+/* 명단 되돌리기 (업로드·삭제·수정 롤백) */
+let rosterUndo=[];
+function pushRosterUndo(){ rosterUndo.push(members.map(m=>({...m, stats:{...(m.stats||EMPTY_STATS)}}))); if(rosterUndo.length>5)rosterUndo.shift(); }
+function undoRoster(){ if(!requireAdmin())return; if(!rosterUndo.length){ toast('되돌릴 변경이 없습니다'); return; }
+  if(!confirm('직전 명단 상태로 되돌릴까요?\n(마지막 업로드/삭제/수정을 취소합니다)')) return;
+  members=rosterUndo.pop(); save(); fbReplaceRoster(members); buildChips(); renderRoster(); renderSummary(); toast('명단을 직전 상태로 되돌렸습니다 ↩️'); }
 
 /* ============ 모달 ============ */
 let tempSkill=3;
@@ -1221,6 +1228,7 @@ function saveMember(){
   const name=document.getElementById('mName').value.trim(); if(!name){toast('이름을 입력하세요');return;}
   const age=parseInt(document.getElementById('mAge').value)||null;
   const pos=document.getElementById('mPos').value, pos2=document.getElementById('mPos2').value, skill=tempSkill;
+  pushRosterUndo();
   let target;
   if(editingId){ target=members.find(x=>x.id===editingId); Object.assign(target,{name,age,position:pos,position2:pos2,skill,photo:tempPhoto}); }
   else{ target={id:uid(),name,age,position:pos,position2:pos2,skill,photo:tempPhoto,attend:true,stats:{...EMPTY_STATS},order:Date.now()}; members.push(target); }
@@ -1271,26 +1279,33 @@ function normPos(v){ v=(v||'').toString().trim().toUpperCase();
 }
 function rowsToMembers(rows){
   const pick=(r,keys)=>{ for(const k of keys) if(r[k]!==undefined&&r[k]!=='') return r[k]; return ''; };
+  // 헤더가 '실력(1~5)'처럼 변형돼도 찾도록 부분일치 검색
+  const fuzzy=(r,re)=>{ for(const key in r){ if(re.test(key) && r[key]!=='' && r[key]!=null) return r[key]; } return ''; };
   const out=[];
   rows.forEach(r=>{
-    const name=pick(r,['이름','성명','name','Name','NAME']).toString().trim();
+    const name=(pick(r,['이름','성명','name','Name','NAME'])||fuzzy(r,/이름|성명|name/i)).toString().trim();
     if(!name) return;
-    const age=parseInt(pick(r,['나이','age','Age','AGE']))||null;
-    const pos=normPos(pick(r,['포지션','주포지션','position','Position','pos','POS']));
-    const pos2raw=pick(r,['서브포지션','sub','position2']); const pos2=pos2raw?normPos(pos2raw):'';
-    const skill=skillNum(pick(r,['실력','별점','skill','Skill','SKILL']));
+    const age=parseInt(pick(r,['나이','age','Age','AGE'])||fuzzy(r,/나이|age/i))||null;
+    const pos=normPos(pick(r,['주포지션','포지션','position','Position','pos','POS'])||fuzzy(r,/주포지션|포지션|position|pos/i));
+    const pos2raw=pick(r,['서브포지션','sub','position2'])||fuzzy(r,/서브|sub|position2/i); const pos2=pos2raw?normPos(pos2raw):'';
+    const skill=skillNum(pick(r,['실력','별점','skill','Skill','SKILL'])||fuzzy(r,/실력|별점|skill/i)||3);
     out.push({id:uid(),name,age,position:pos,position2:pos2,skill,photo:null,attend:true,stats:{...EMPTY_STATS}});
   });
   return out;
 }
 function applyImport(list){
   if(!requireAdmin())return;
-  if(!list.length){ toast('가져올 선수가 없습니다. 양식(이름/나이/포지션/실력)을 확인하세요'); return; }
+  if(!list.length){ toast('가져올 선수가 없습니다. 양식(이름/주포지션/실력)을 확인하세요'); return; }
   const replace=confirm(`${list.length}명을 불러왔습니다.\n\n[확인] 기존 명단을 대체합니다.\n[취소] 기존 명단에 추가합니다.`);
-  if(replace){ list.forEach((m,i)=>m.order=i); members=list; fbReplaceRoster(members); }
-  else { list.forEach((m,i)=>m.order=Date.now()+i); members=members.concat(list); list.forEach(m=>fbSaveMember(m)); }
+  pushRosterUndo();
+  if(replace){
+    // 기존 선수의 사진·기록·id를 이름으로 매칭해 보존 (사진은 업로드와 무관하게 유지)
+    const byName={}; members.forEach(m=>{ byName[m.name]=m; });
+    list.forEach((m,i)=>{ const ex=byName[m.name]; if(ex){ m.id=ex.id; m.photo=ex.photo||null; m.stats=ex.stats||m.stats; m.attend=ex.attend; } m.order=i; });
+    members=list; fbReplaceRoster(members);
+  } else { list.forEach((m,i)=>m.order=Date.now()+i); members=members.concat(list); list.forEach(m=>fbSaveMember(m)); }
   save(); buildChips(); renderRoster(); renderSummary();
-  toast(`${list.length}명 ${replace?'대체':'추가'} 완료 ✅`);
+  toast(`${list.length}명 ${replace?'대체':'추가'} 완료 ✅ (사진 유지)`);
 }
 function parseCSV(text){
   const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
