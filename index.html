@@ -250,8 +250,10 @@
   .stars .fill{position:absolute; left:0; top:0; overflow:hidden; color:#ff9f1a; white-space:nowrap;}
   .stars .fill::before{content:'★★★★★';}
   .stars.big{font-size:28px; letter-spacing:5px;}
-  .star-input{cursor:pointer; display:flex; align-items:center; gap:12px; padding:4px 0;}
+  .star-input{cursor:pointer; display:flex; align-items:center; gap:12px; padding:6px 2px; touch-action:none; user-select:none;}
+  .star-input .stars{pointer-events:none;}
   .star-val{font-family:var(--f-label); font-size:12px; color:var(--on-var); font-weight:600;}
+  .mini-sel{width:auto; padding:7px 8px; font-size:12px;}
   .mr-toggle{flex-shrink:0; font-family:var(--f-label); font-size:11px; font-weight:700; letter-spacing:.02em;
     padding:5px 9px; border-radius:999px; border:1px solid var(--outline-v); background:var(--c-low); color:var(--on-var); cursor:pointer; transition:.14s;}
   .mr-toggle.on{background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff; border-color:rgba(168,178,193,.35);}
@@ -588,6 +590,16 @@
           <div class="chips" id="attendChips"></div></div>
         <div class="fgroup"><span class="lab">정렬</span>
           <div class="chips" id="sortChips"></div></div>
+        <div class="fgroup admin-only"><span class="lab">별점</span>
+          <div style="display:flex; gap:5px;">
+            <select id="starDir" class="mini-sel" onchange="setStarFilter()"><option value="gte">이상</option><option value="lte">이하</option></select>
+            <select id="starVal" class="mini-sel" onchange="setStarFilter()">
+              <option value="all">전체</option>
+              <option value="5">5.0★</option><option value="4.5">4.5★</option><option value="4">4.0★</option>
+              <option value="3.5">3.5★</option><option value="3">3.0★</option><option value="2.5">2.5★</option>
+              <option value="2">2.0★</option><option value="1.5">1.5★</option><option value="1">1.0★</option><option value="0.5">0.5★</option>
+            </select>
+          </div></div>
       </div>
       <div class="tb-right">
         <button class="btn ghost sm" onclick="toggleAll(true)">전체 참석</button>
@@ -792,7 +804,7 @@ const DEFAULT_ROSTER=[
 
 let members=[], guests=[], editingId=null, tempPhoto=null, lastTeams=null;
 let matches=[], history=[], lastTeamSize=11;
-let filter={q:'',pos:'all',skill:'all',attend:'all',sort:'default'};
+let filter={q:'',pos:'all',attend:'all',sort:'default',star:'all',starDir:'gte'};
 let hitMap={orange:[],green:[]};
 let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
@@ -1120,6 +1132,7 @@ function buildChips(){
   });
 }
 function setFilter(key,val){ filter[key]=val; buildChips(); renderRoster(); }
+function setStarFilter(){ filter.starDir=document.getElementById('starDir').value; filter.star=document.getElementById('starVal').value; renderRoster(); }
 function toggleRosterTools(){ const el=document.getElementById('rosterTools'); el.style.display = (el.style.display==='none'||!el.style.display)?'inline-flex':'none'; }
 function toggleCard(id){ document.getElementById(id).classList.toggle('collapsed'); }
 
@@ -1130,6 +1143,9 @@ function filtered(){
     if(filter.pos!=='all' && grp(m.position)!==filter.pos) return false;
     if(filter.attend==='yes' && !m.attend) return false;
     if(filter.attend==='no' && m.attend) return false;
+    if(filter.star!=='all'){ const v=skillNum(m.skill), t=+filter.star;
+      if(filter.starDir==='gte' && v<t) return false;
+      if(filter.starDir==='lte' && v>t) return false; }
     return true;
   });
   if(filter.sort==='name') arr.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
@@ -1832,10 +1848,13 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 document.querySelectorAll('input[name=mtd]').forEach(r=>r.addEventListener('change',()=>{
   document.querySelectorAll('.method .opt').forEach(o=>o.classList.remove('sel')); r.closest('.opt').classList.add('sel'); }));
 document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay')closeModal(); });
-(function(){ const si=document.getElementById('starInput');
+(function(){ const si=document.getElementById('starInput'); let dragging=false;
   const setFromX=e=>{ const stars=si.querySelector('.stars'); if(!stars)return; const rect=stars.getBoundingClientRect();
     let v=Math.ceil((e.clientX-rect.left)/rect.width*10)/2; tempSkill=Math.min(5,Math.max(0.5,v)); renderStarInput(); };
-  si.addEventListener('click',setFromX);
+  si.addEventListener('pointerdown',e=>{ dragging=true; try{si.setPointerCapture(e.pointerId);}catch(_){} setFromX(e); e.preventDefault(); });
+  si.addEventListener('pointermove',e=>{ if(dragging) setFromX(e); });
+  si.addEventListener('pointerup',()=>{ dragging=false; });
+  si.addEventListener('pointercancel',()=>{ dragging=false; });
 })();
 document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target.id==='editOverlay')closeEditLineup(); });
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
