@@ -260,6 +260,7 @@
   .star-input{cursor:pointer; display:flex; align-items:center; gap:12px; padding:6px 2px; touch-action:none; user-select:none;}
   .star-input .stars{pointer-events:none;}
   .star-val{font-family:var(--f-label); font-size:12px; color:var(--on-var); font-weight:600;}
+  .modal.photo-only #editFields{display:none;}
   .mr-toggle{flex-shrink:0; font-family:var(--f-label); font-size:11px; font-weight:700; letter-spacing:.02em;
     padding:5px 9px; border-radius:999px; border:1px solid var(--outline-v); background:var(--c-low); color:var(--on-var); cursor:pointer; transition:.14s;}
   .mr-toggle.on{background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff; border-color:rgba(168,178,193,.35);}
@@ -598,8 +599,8 @@
           <div class="chips" id="sortChips"></div></div>
       </div>
       <div class="tb-right">
-        <button class="btn ghost sm" onclick="toggleAll(true)">전체 참석</button>
-        <button class="btn ghost sm" onclick="toggleAll(false)">전체 해제</button>
+        <button class="btn ghost sm admin-only" onclick="toggleAll(true)">전체 참석</button>
+        <button class="btn ghost sm admin-only" onclick="toggleAll(false)">전체 해제</button>
         <button class="btn ghost sm admin-only" onclick="toggleRosterTools()">⚙️ 명단 도구</button>
         <span id="rosterTools" style="display:none;">
           <button class="btn ghost sm admin-only" onclick="downloadTemplate()">📄 양식</button>
@@ -689,11 +690,12 @@
 
 <!-- modal -->
 <div class="overlay" id="overlay">
-  <div class="modal">
+  <div class="modal" id="memberModal">
     <h3 id="modalTitle">선수 추가</h3>
     <div class="ava-edit" id="avaEdit" onclick="document.getElementById('photoInput').click()"><span class="hint">사진 선택</span></div>
     <input type="file" id="photoInput" accept="image/*" style="display:none">
     <button type="button" id="avaDelBtn" class="btn ghost sm" style="display:none; margin:8px auto 0;" onclick="clearPhoto()">🗑️ 사진 삭제</button>
+    <div id="editFields">
     <div class="rowg">
       <div style="flex:2"><label class="fld">이름</label>
         <input type="text" id="mName" placeholder="선수 이름" maxlength="10"></div>
@@ -706,6 +708,7 @@
     </div>
     <label class="fld">실력 (별점)</label>
     <div class="star-input" id="starInput"></div>
+    </div>
     <div class="modal-btns">
       <button class="btn primary" style="flex:1;" onclick="saveMember()">저장</button>
       <button class="btn ghost" style="flex:1;" onclick="closeModal()">취소</button>
@@ -814,7 +817,9 @@ let drag=null, hoverRef=null, hoverKey=null;
 const EMPTY_STATS={games:0,goals:0,assists:0,saves:0};
 
 /* ============ Firebase 연동 (실시간 동기화 · 운영진 편집) ============ */
-let FB=null, FBauth=null, FBstorage=null, isAdmin=false, currentUser=null, attendMap={}, authMode='login', role='none';
+let FB=null, FBauth=null, FBstorage=null, isAdmin=false, currentUser=null, myName='', authMode='login', role='none', editMode='admin';
+function isMine(m){ return !!myName && !!m && m.name===myName; }
+function canEditMember(m){ return isAdmin || isMine(m); }
 let teamConfig={orange:{name:'오렌지 팀',color:'#ff8a2b'},green:{name:'그린 팀',color:'#3ddc84'}};
 function canEdit(){ return isAdmin; }
 function canView(){ return role==='admin'||role==='member'; }
@@ -838,10 +843,8 @@ function saveTeamCfg(){ if(!requireAdmin())return;
   if(FB&&isAdmin) FB.collection('settings').doc('teams').set(teamConfig).catch(e=>console.error(e));
   applyTeamConfig(); closeTeamCfg(); toast('팀 설정을 저장했습니다 🎨'); }
 function requireAdmin(){ if(canEdit()) return true; toast('운영진 로그인이 필요합니다 🔒'); return false; }
-function loadAttend(){ const r=localStorage.getItem('suziFC_attend'); if(r){try{attendMap=JSON.parse(r);}catch(e){attendMap={};}} }
-function saveAttend(){ localStorage.setItem('suziFC_attend',JSON.stringify(attendMap)); }
-function applyAttendToMembers(){ members.forEach(m=>{ if(attendMap[m.id]!==undefined) m.attend=attendMap[m.id]; }); }
-function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,position2:m.position2||'',skill:skillNum(m.skill),photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},order:(m.order!==undefined?m.order:(i||0))}; }
+function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,position2:m.position2||'',skill:skillNum(m.skill),photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},attend:(m.attend!==false),order:(m.order!==undefined?m.order:(i||0))}; }
+function fbUpdateField(m,obj){ if(!FB||!m||!(isAdmin||isMine(m)))return; FB.collection('roster').doc(m.id).update(obj).catch(e=>console.error(e)); }
 function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||'',momId:mt.momId||'',momName:mt.momName||''}; }
 function initFirebase(){
   if(!window.firebase || !window.SUJI_FIREBASE_CONFIG){ document.getElementById('gateBody').innerHTML='<p class="gate-msg">앱을 불러오지 못했습니다.<br>인터넷 연결 후 새로고침 해주세요.</p>'; return false; }
@@ -854,8 +857,9 @@ function initFirebase(){
     FBauth.onAuthStateChanged(u=>{ currentUser=u;
       if(!u){ role='none'; isAdmin=false; onRoleResolved(); return; }
       Promise.all([FB.collection('admins').doc(u.uid).get(), FB.collection('members').doc(u.uid).get()])
-        .then(([a,m])=>{ role = a.exists?'admin':(m.exists?'member':'pending'); isAdmin=(role==='admin'); onRoleResolved(); })
-        .catch(()=>{ role='pending'; isAdmin=false; onRoleResolved(); });
+        .then(([a,m])=>{ role = a.exists?'admin':(m.exists?'member':'pending'); isAdmin=(role==='admin');
+          myName = a.exists ? (a.data().name||'') : (m.exists ? (m.data().name||'') : ''); onRoleResolved(); })
+        .catch(()=>{ role='pending'; isAdmin=false; myName=''; onRoleResolved(); });
     });
     return true;
   }catch(e){ console.error('Firebase init 실패',e); FB=null; return false; }
@@ -881,7 +885,7 @@ function subscribeRoster(){
   rosterUnsub=FB.collection('roster').onSnapshot(snap=>{
     if(snap.empty) return;
     const arr=[];
-    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,name:d.name,age:(d.age??null),position:d.position||'MF',position2:(d.position2||''),skill:skillNum(d.skill),photo:d.photo||null,stats:d.stats||{...EMPTY_STATS},order:(d.order??0),attend:(attendMap[doc.id]!==undefined?attendMap[doc.id]:true)}); });
+    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,name:d.name,age:(d.age??null),position:d.position||'MF',position2:(d.position2||''),skill:skillNum(d.skill),photo:d.photo||null,stats:d.stats||{...EMPTY_STATS},order:(d.order??0),attend:(d.attend!==false)}); });
     arr.sort((a,b)=>(a.order-b.order)||a.name.localeCompare(b.name,'ko'));
     members=arr; save();
     renderRoster(); renderSummary();
@@ -1186,12 +1190,12 @@ function renderRoster(){
         <span class="mr-sp"></span>
         <button class="mr-toggle ${m.attend?'on':''}" onclick="toggleAttend('${m.id}')">${m.attend?'참석':'불참'}</button>
       </div>
-      <div class="mr-bottom admin-only">
-        ${starsHtml(m.skill)}<span class="star-val">${skillNum(m.skill)}</span>
+      ${(isAdmin||isMine(m))?`<div class="mr-bottom">
+        ${isAdmin?`${starsHtml(m.skill)}<span class="star-val">${skillNum(m.skill)}</span>`:'<span class="mr-star-lbl" style="color:var(--tertiary)">● 내 프로필</span>'}
         <span class="mr-sp"></span>
-        <button class="mr-ic" onclick="openEdit('${m.id}')" title="수정">✏️ 수정</button>
-        <button class="mr-ic" onclick="delMember('${m.id}')" title="삭제">🗑️</button>
-      </div>`;
+        <button class="mr-ic" onclick="openEdit('${m.id}')" title="사진 수정">✏️ ${isAdmin?'수정':'내 사진'}</button>
+        ${isAdmin?`<button class="mr-ic" onclick="delMember('${m.id}')" title="삭제">🗑️</button>`:''}
+      </div>`:''}`;
     box.appendChild(el);
   });
 }
@@ -1205,8 +1209,11 @@ function renderSummary(){
   document.getElementById('s-need').textContent=need;
   document.getElementById('s-attend-box').classList.toggle('warn',total<need);
 }
-function toggleAttend(id){ const m=members.find(x=>x.id===id); if(!m)return; m.attend=!m.attend; attendMap[id]=m.attend; saveAttend(); save(); renderRoster(); renderSummary(); }
-function toggleAll(v){ filtered().forEach(m=>{m.attend=v; attendMap[m.id]=v;}); saveAttend(); save(); renderRoster(); renderSummary(); }
+function toggleAttend(id){ const m=members.find(x=>x.id===id); if(!m)return;
+  if(!isAdmin && !isMine(m)){ toast('본인 이름과 일치하는 선수만 참석 체크할 수 있어요'); return; }
+  m.attend=!m.attend; save(); fbUpdateField(m,{attend:m.attend}); renderRoster(); renderSummary(); }
+function toggleAll(v){ if(!requireAdmin())return; const targets=filtered(); targets.forEach(m=>m.attend=v); save(); renderRoster(); renderSummary();
+  if(FB&&isAdmin){ const batch=FB.batch(); targets.forEach(m=>batch.update(FB.collection('roster').doc(m.id),{attend:v})); batch.commit().catch(e=>console.error(e)); } }
 function delMember(id){ if(!requireAdmin())return; if(!confirm('이 선수를 삭제할까요?'))return; pushRosterUndo(); members=members.filter(m=>m.id!==id); save(); fbDeleteMember(id); renderRoster(); renderSummary(); }
 /* 명단 되돌리기 (업로드·삭제·수정 롤백) */
 let rosterUndo=[];
@@ -1219,19 +1226,26 @@ function undoRoster(){ if(!requireAdmin())return; if(!rosterUndo.length){ toast(
 let tempSkill=3;
 function renderStarInput(){ const el=document.getElementById('starInput');
   el.innerHTML=`<span class="stars big"><span class="fill" style="width:${tempSkill/5*100}%"></span></span><span class="star-val">${tempSkill}점</span>`; }
-function openAdd(){ if(!requireAdmin())return; editingId=null; tempPhoto=null;
+function openAdd(){ if(!requireAdmin())return; editingId=null; tempPhoto=null; editMode='admin';
+  document.getElementById('memberModal').classList.remove('photo-only');
   document.getElementById('modalTitle').textContent='선수 추가';
   document.getElementById('mName').value=''; document.getElementById('mAge').value='';
   document.getElementById('mPos').innerHTML=posOptionsHtml('MF',false);
   document.getElementById('mPos2').innerHTML=posOptionsHtml('',true);
   tempSkill=3; renderStarInput();
   setAva(null,'사진 선택'); document.getElementById('overlay').classList.add('on'); }
-function openEdit(id){ if(!requireAdmin())return; const m=members.find(x=>x.id===id); editingId=id; tempPhoto=m.photo;
-  document.getElementById('modalTitle').textContent='선수 수정';
-  document.getElementById('mName').value=m.name; document.getElementById('mAge').value=m.age||'';
-  document.getElementById('mPos').innerHTML=posOptionsHtml(m.position,false);
-  document.getElementById('mPos2').innerHTML=posOptionsHtml(m.position2||'',true);
-  tempSkill=skillNum(m.skill); renderStarInput();
+function openEdit(id){ const m=members.find(x=>x.id===id); if(!m)return;
+  if(!isAdmin && !isMine(m)){ toast('본인 정보만 수정할 수 있습니다'); return; }
+  editingId=id; tempPhoto=m.photo;
+  const modal=document.getElementById('memberModal');
+  if(isAdmin){ editMode='admin'; modal.classList.remove('photo-only');
+    document.getElementById('modalTitle').textContent='선수 수정';
+    document.getElementById('mName').value=m.name; document.getElementById('mAge').value=m.age||'';
+    document.getElementById('mPos').innerHTML=posOptionsHtml(m.position,false);
+    document.getElementById('mPos2').innerHTML=posOptionsHtml(m.position2||'',true);
+    tempSkill=skillNum(m.skill); renderStarInput();
+  } else { editMode='own'; modal.classList.add('photo-only');
+    document.getElementById('modalTitle').textContent='내 프로필 사진'; }
   setAva(m.photo,m.name[0]); document.getElementById('overlay').classList.add('on'); }
 function setAva(photo,fb){ const a=document.getElementById('avaEdit');
   if(photo){a.style.backgroundImage=`url('${photo}')`;a.innerHTML='';}
@@ -1242,6 +1256,12 @@ function closeModal(){ document.getElementById('overlay').classList.remove('on')
 document.getElementById('photoInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return;
   const r=new FileReader(); r.onload=ev=>openCrop(ev.target.result); r.readAsDataURL(f); e.target.value=''; });
 function saveMember(){
+  // 일반회원: 본인 사진만 변경
+  if(editMode==='own'){
+    const m=members.find(x=>x.id===editingId);
+    if(!m||!isMine(m)){ toast('본인 정보만 수정할 수 있습니다'); return; }
+    m.photo=tempPhoto||null; save(); fbUpdateField(m,{photo:m.photo}); renderRoster(); closeModal(); toast('프로필 사진을 저장했습니다 📷'); return;
+  }
   if(!requireAdmin())return;
   const name=document.getElementById('mName').value.trim(); if(!name){toast('이름을 입력하세요');return;}
   const age=parseInt(document.getElementById('mAge').value)||null;
@@ -1866,13 +1886,15 @@ function renderStats(q){
     html+=`<tr><td class="name-col"><span class="p-name">
       <span class="bc-ava"${ava}>${m.photo?'':m.name[0]}</span>${m.name}
       <span class="badge pos" style="background:${POS_COLORS[grp(m.position)]}">${m.position}</span>${m.position2?`<span class="badge subpos">${m.position2}</span>`:''}</span></td>`;
-    STAT_COLS.forEach(c=>{ html+=`<td><input class="s-in" type="number" min="0" value="${st[c[0]]||0}" ${canEdit()?'':'disabled'} onchange="updStat('${m.id}','${c[0]}',this.value)"></td>`; });
+    const mine=isAdmin||isMine(m);
+    STAT_COLS.forEach(c=>{ html+=`<td><input class="s-in" type="number" min="0" value="${st[c[0]]||0}" ${mine?'':'disabled'} onchange="updStat('${m.id}','${c[0]}',this.value)"></td>`; });
     html+=`</tr>`;
   });
   html+=`</tbody>`; table.innerHTML=html;
 }
-function updStat(id,key,val){ if(!requireAdmin())return; const m=members.find(x=>x.id===id); if(!m)return; if(!m.stats)m.stats={...EMPTY_STATS};
-  m.stats[key]=Math.max(0,parseInt(val)||0); save(); fbSaveMember(m); }
+function updStat(id,key,val){ const m=members.find(x=>x.id===id); if(!m)return;
+  if(!isAdmin && !isMine(m)){ toast('본인 기록만 입력할 수 있습니다'); return; }
+  if(!m.stats)m.stats={...EMPTY_STATS}; m.stats[key]=Math.max(0,parseInt(val)||0); save(); fbUpdateField(m,{stats:m.stats}); }
 function exportStats(){
   if(!requireAdmin())return;
   const header=['이름','포지션','경기','골','도움','세이브'];
@@ -1913,7 +1935,7 @@ document.addEventListener('pointerup',onDragEnd);
 document.addEventListener('pointercancel',onDragEnd);
 
 /* 초기화 */
-load(); loadGuests(); loadMatches(); loadHistory(); loadAttend(); loadTeamConfig(); applyAttendToMembers();
+load(); loadGuests(); loadMatches(); loadHistory(); loadTeamConfig();
 buildChips(); renderRoster(); renderGuests(); renderSummary(); applyTeamConfig();
 document.getElementById('authGate').style.display='flex';  // 인증 확인 전엔 로그인 화면
 renderAuthMode();
