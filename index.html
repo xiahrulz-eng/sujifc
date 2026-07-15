@@ -731,7 +731,10 @@
     <h3 id="modalTitle">선수 추가</h3>
     <div class="ava-edit" id="avaEdit" onclick="document.getElementById('photoInput').click()"><span class="hint">사진 선택</span></div>
     <input type="file" id="photoInput" accept="image/*" style="display:none">
-    <button type="button" id="avaDelBtn" class="btn ghost sm" style="display:none; margin:8px auto 0;" onclick="clearPhoto()">🗑️ 사진 삭제</button>
+    <div id="avaBtns" style="display:none; justify-content:center; gap:8px; margin-top:8px;">
+      <button type="button" class="btn ghost sm" onclick="if(tempPhoto)openCrop(tempPhoto)">🔍 크기 조절</button>
+      <button type="button" class="btn ghost sm" onclick="clearPhoto()">🗑️ 사진 삭제</button>
+    </div>
     <div id="editNameAge" class="rowg">
       <div style="flex:2"><label class="fld">이름</label>
         <input type="text" id="mName" placeholder="선수 이름" maxlength="10"></div>
@@ -1318,7 +1321,7 @@ function openEdit(id){ const m=members.find(x=>x.id===id); if(!m)return;
 function setAva(photo,fb){ const a=document.getElementById('avaEdit');
   if(photo){a.style.backgroundImage=`url('${photo}')`;a.innerHTML='';}
   else{a.style.backgroundImage='';a.innerHTML=`<span class="hint">${fb||'사진 선택'}</span>`;}
-  const d=document.getElementById('avaDelBtn'); if(d) d.style.display=photo?'block':'none'; }
+  const btns=document.getElementById('avaBtns'); if(btns) btns.style.display=photo?'flex':'none'; }
 function clearPhoto(){ tempPhoto=null; const nm=document.getElementById('mName').value.trim(); setAva(null,nm?nm[0]:'사진 선택'); toast('사진을 삭제했습니다'); }
 function closeModal(){ document.getElementById('overlay').classList.remove('on'); }
 document.getElementById('photoInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return;
