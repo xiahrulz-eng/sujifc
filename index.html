@@ -911,7 +911,7 @@ function updateAdminUI(){
     info.textContent = isAdmin?'● 운영진':'● 회원';
     mng.style.display=isAdmin?'':'none';
   } else { btn.style.display='none'; info.textContent=''; mng.style.display='none'; }
-  renderRoster();
+  buildChips(); renderRoster();
   if(document.getElementById('view-stats').classList.contains('on')) renderStats();
   if(document.getElementById('view-match').classList.contains('on')) renderMatches();
 }
@@ -1143,11 +1143,12 @@ function buildPosChips(){
 }
 function buildSortChips(){
   const el=document.getElementById('sortChips'); el.innerHTML='';
+  if(!canEdit() && sortKey==='star') sortKey=null;   // 일반회원은 별점순 사용 불가(실력 유추 방지)
   const arr=k=> sortKey===k ? (sortDir>0?' ▲':' ▼') : '';
   el.appendChild(chipBtn('기본', sortKey===null, ()=>{ sortKey=null; buildSortChips(); renderRoster(); }));
   const cycle=k=>{ if(sortKey!==k){sortKey=k;sortDir=1;} else if(sortDir===1){sortDir=-1;} else {sortKey=null;} buildSortChips(); renderRoster(); };
   el.appendChild(chipBtn('가나다순'+arr('name'), sortKey==='name', ()=>cycle('name')));
-  el.appendChild(chipBtn('별점순'+arr('star'), sortKey==='star', ()=>cycle('star')));
+  if(canEdit()) el.appendChild(chipBtn('별점순'+arr('star'), sortKey==='star', ()=>cycle('star')));
 }
 function setFilter(key,val){ filter[key]=val; renderRoster(); }
 function toggleRosterTools(){ const el=document.getElementById('rosterTools'); el.style.display = (el.style.display==='none'||!el.style.display)?'inline-flex':'none'; }
