@@ -96,7 +96,8 @@
   #card-maker.collapsed>.sec.toggle{margin-bottom:0;}
   #card-maker.collapsed .card-body{display:none;}
   #card-maker.collapsed .chev{transform:rotate(-90deg);}
-  #confirmedBox img{width:100%; border-radius:var(--r-lg); box-shadow:0 10px 30px rgba(0,0,0,.4); cursor:pointer;}
+  #confirmedBox img{width:100%; border-radius:var(--r-lg); box-shadow:0 10px 30px rgba(0,0,0,.4); cursor:pointer; display:block;}
+  .confirmed-btns{display:flex; gap:8px; margin-top:10px;} .confirmed-btns .btn{flex:1;}
   label.fld{display:block; font-family:var(--f-label); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--on-var); margin:14px 0 7px;}
 
   /* controls */
@@ -394,8 +395,11 @@
   .gal-del{position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; border:none; background:rgba(12,14,17,.8);
     color:var(--lime-bright); font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center;}
   .gallery-add{display:flex; gap:8px; flex-wrap:wrap;}
-  #lightbox{z-index:80; padding:20px;}
-  #lightbox img{max-width:92vw; max-height:86vh; border-radius:var(--r); box-shadow:0 20px 60px rgba(0,0,0,.7);}
+  #lightbox{z-index:80; padding:20px; flex-direction:column;}
+  #lightbox img{max-width:92vw; max-height:82vh; border-radius:var(--r); box-shadow:0 20px 60px rgba(0,0,0,.7);
+    touch-action:none; cursor:grab; transform-origin:center center; will-change:transform;}
+  .lb-bar{position:fixed; top:16px; right:16px; display:flex; gap:8px; z-index:81;}
+  .lb-bar .btn{background:rgba(20,25,35,.85); border:1px solid rgba(168,178,193,.4);}
   /* 사진 크롭 편집기 */
   #cropOverlay{z-index:70;}
   .crop-stage{width:280px; max-width:100%; margin:0 auto; border-radius:var(--r-md); overflow:hidden; touch-action:none; cursor:grab;
@@ -762,7 +766,13 @@
 <!-- match media input + lightbox -->
 <input type="file" id="mediaInput" accept="image/*" multiple style="display:none">
 <input type="file" id="videoInput" accept="video/*" style="display:none">
-<div class="overlay" id="lightbox"><img id="lightboxImg" alt=""></div>
+<div class="overlay" id="lightbox">
+  <div class="lb-bar">
+    <button class="btn sm" onclick="event.stopPropagation();downloadLightbox()">💾 저장</button>
+    <button class="btn sm" onclick="event.stopPropagation();closeLightbox()">✕ 닫기</button>
+  </div>
+  <img id="lightboxImg" alt="">
+</div>
 
 <!-- photo crop modal -->
 <div class="overlay" id="cropOverlay"><div class="modal">
@@ -925,12 +935,23 @@ function stopData(){ dataStarted=false;
   if(lineupUnsub){try{lineupUnsub();}catch(e){} lineupUnsub=null;} }
 /* 확정 라인업 (운영진이 확정 → 전 회원 공유) */
 function subscribeLineup(){ if(lineupUnsub||!FB)return; lineupUnsub=FB.collection('settings').doc('lineup').onSnapshot(doc=>{ renderConfirmed(doc.exists?doc.data():null); }, e=>console.error('lineup',e)); }
+let confirmedImage=null;
 function renderConfirmed(data){
   const box=document.getElementById('confirmedBox'), info=document.getElementById('confirmedInfo'); if(!box)return;
-  if(data && data.image){ box.innerHTML=`<img src="${data.image}" onclick="openLightbox(this.src)">`;
+  if(data && data.image){ confirmedImage=data.image;
+    box.innerHTML=`<img src="${data.image}" onclick="openLightbox(this.src)">
+      <div class="confirmed-btns">
+        <button class="btn sm" onclick="openLightbox(confirmedImage)">🔍 확대</button>
+        <button class="btn sm primary" onclick="downloadConfirmed()">💾 저장</button>
+        ${isAdmin?`<button class="btn sm danger" onclick="cancelLineup()">❌ 확정 취소</button>`:''}
+      </div>`;
     if(info) info.textContent = data.at ? ('확정 '+fmtTime(data.at)) : ''; }
-  else { box.innerHTML='<div class="empty">🕒 현재 라인업이 준비중입니다.</div>'; if(info) info.textContent=''; }
+  else { confirmedImage=null; box.innerHTML='<div class="empty">🕒 현재 라인업이 준비중입니다.</div>'; if(info) info.textContent=''; }
 }
+function downloadConfirmed(){ if(!confirmedImage){ toast('저장할 라인업이 없습니다'); return; }
+  const a=document.createElement('a'); a.download='수지FC_확정라인업.jpg'; a.href=confirmedImage; a.click(); }
+function cancelLineup(){ if(!requireAdmin())return; if(!confirm('확정 라인업을 취소할까요?\n(회원 화면이 "준비중"으로 바뀝니다)'))return;
+  FB.collection('settings').doc('lineup').delete().then(()=>toast('확정을 취소했습니다')).catch(e=>{ console.error(e); toast('취소 실패'); }); }
 function confirmLineup(){
   if(!requireAdmin())return;
   const c1=document.getElementById('cv_orange'), c2=document.getElementById('cv_green');
@@ -1933,7 +1954,12 @@ function delMedia(id,mid,path){ if(!requireAdmin())return; if(!confirm('이 항�
   FB.collection('matches').doc(id).collection('media').doc(mid).delete().then(()=>{
     if(path && FBstorage){ FBstorage.ref(path).delete().catch(()=>{}); } loadGallery(id);
   }).catch(e=>{ console.error(e); toast('삭제 실패'); }); }
-function openLightbox(src){ document.getElementById('lightboxImg').src=src; document.getElementById('lightbox').classList.add('on'); }
+let lbScale=1, lbX=0, lbY=0;
+function lbApply(){ const img=document.getElementById('lightboxImg'); img.style.transform=`translate(${lbX}px,${lbY}px) scale(${lbScale})`; }
+function openLightbox(src){ lbScale=1; lbX=0; lbY=0; const img=document.getElementById('lightboxImg'); img.src=src; lbApply(); document.getElementById('lightbox').classList.add('on'); }
+function closeLightbox(){ document.getElementById('lightbox').classList.remove('on'); }
+function downloadLightbox(){ const src=document.getElementById('lightboxImg').src; if(!src){toast('이미지가 없습니다');return;}
+  const a=document.createElement('a'); a.download='수지FC_이미지.jpg'; a.href=src; a.click(); }
 function viewMemberPhoto(id){ const m=members.find(x=>x.id===id); if(!m)return; openLightbox(m.photo||DEFAULT_PROFILE_SRC); }
 function updMatch(id,field,val){ if(!requireAdmin())return; const m=matches.find(x=>x.id===id); if(!m)return; m[field]=val; saveMatches(); fbSaveMatch(m); }
 function delMatch(id){ if(!requireAdmin())return; if(!confirm('이 경기를 삭제할까요?'))return; matches=matches.filter(m=>m.id!==id); saveMatches(); fbDeleteMatch(id); renderMatches(); }
@@ -2050,7 +2076,20 @@ document.getElementById('authGate').style.display='flex';  // 인증 확인 전�
 renderAuthMode();
 initFirebase(); updateAdminUI();
 document.getElementById('teamOverlay').addEventListener('click',e=>{ if(e.target.id==='teamOverlay')closeTeamCfg(); });
-document.getElementById('lightbox').addEventListener('click',()=>document.getElementById('lightbox').classList.remove('on'));
+(function(){ const lb=document.getElementById('lightbox'), img=document.getElementById('lightboxImg');
+  lb.addEventListener('click',e=>{ if(e.target===lb) closeLightbox(); });   // 배경 탭만 닫힘
+  const ptrs=new Map(); let pan=null, pinch=null; const dist=p=>Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+  img.addEventListener('pointerdown',e=>{ try{img.setPointerCapture(e.pointerId);}catch(_){} ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); e.preventDefault();
+    if(ptrs.size===1){ pan={x:e.clientX,y:e.clientY,ox:lbX,oy:lbY}; pinch=null; }
+    else if(ptrs.size===2){ pinch={d:dist([...ptrs.values()]),s:lbScale}; pan=null; } });
+  img.addEventListener('pointermove',e=>{ if(!ptrs.has(e.pointerId))return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch&&ptrs.size>=2){ lbScale=clampv(pinch.s*(dist([...ptrs.values()])/pinch.d),1,6); lbApply(); }
+    else if(pan&&lbScale>1){ lbX=pan.ox+(e.clientX-pan.x); lbY=pan.oy+(e.clientY-pan.y); lbApply(); } });
+  const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2)pinch=null; if(ptrs.size===0){ pan=null; if(lbScale<=1){lbX=0;lbY=0;lbApply();} } };
+  img.addEventListener('pointerup',up); img.addEventListener('pointercancel',up);
+  img.addEventListener('wheel',e=>{ e.preventDefault(); lbScale=clampv(lbScale*(e.deltaY<0?1.15:0.87),1,6); if(lbScale<=1){lbX=0;lbY=0;} lbApply(); }, {passive:false});
+  img.addEventListener('dblclick',e=>{ e.preventDefault(); lbScale=lbScale>1?1:2.4; lbX=0; lbY=0; lbApply(); });
+})();
 document.getElementById('mediaInput').addEventListener('change',e=>{ const files=[...e.target.files]; const id=pendingMediaMatch; e.target.value=''; if(!files.length||!id)return;
   const total=files.length; let done=0, ok=0; toast(`사진 ${total}장 업로드 중... ⏳`);
   files.forEach((f,i)=>{ const r=new FileReader(); r.onload=ev=>compressImage(ev.target.result,d=>{
