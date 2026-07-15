@@ -132,7 +132,7 @@
     header{padding:12px 16px; gap:10px; flex-wrap:wrap;}
     .logo{font-size:18px;} .logo .mk{width:30px;height:30px;font-size:16px;}
     header .spacer{display:none;}
-    .tabs{flex:1 1 100%; order:3;} .tabs button{flex:1; padding:9px 8px;}
+    .tabs{flex:1 1 100%; order:3; overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;} .tabs button{flex:0 0 auto; padding:9px 14px;}
     .view{padding:16px;}
     .card{padding:14px; border-radius:14px;}
     h2.sec{font-size:16px;}
@@ -260,7 +260,7 @@
   .star-input{cursor:pointer; display:flex; align-items:center; gap:12px; padding:6px 2px; touch-action:none; user-select:none;}
   .star-input .stars{pointer-events:none;}
   .star-val{font-family:var(--f-label); font-size:12px; color:var(--on-var); font-weight:600;}
-  .modal.photo-only #editFields{display:none;}
+  .modal.member-edit #editNameAge, .modal.member-edit #editSkill{display:none;}
   .mr-toggle{flex-shrink:0; font-family:var(--f-label); font-size:11px; font-weight:700; letter-spacing:.02em;
     padding:5px 9px; border-radius:999px; border:1px solid var(--outline-v); background:var(--c-low); color:var(--on-var); cursor:pointer; transition:.14s;}
   .mr-toggle.on{background:linear-gradient(135deg,var(--navy-a),var(--navy-b)); color:#eaf0ff; border-color:rgba(168,178,193,.35);}
@@ -441,6 +441,17 @@
   .hist-item .hi-info{flex:1; min-width:0;}
   .hist-item .hi-t{font-weight:600; font-size:14px;}
   .hist-item .hi-d{font-size:11px; color:var(--on-var); margin-top:2px;}
+  /* 건의사항 */
+  .suggest-toolbar{display:flex; align-items:center; gap:8px; margin-bottom:12px;}
+  .suggest-item{display:flex; align-items:flex-start; gap:10px; padding:12px; border-radius:var(--r); background:var(--c-low);
+    border:1px solid var(--outline-v); margin-bottom:8px; cursor:pointer;}
+  .suggest-item .sg-chk{margin-top:3px; width:16px; height:16px; accent-color:var(--primary); flex-shrink:0;}
+  .suggest-item .sg-body{flex:1; min-width:0;}
+  .suggest-item .sg-text{font-size:14px; line-height:1.55; word-break:break-word;}
+  .suggest-item .sg-meta{font-family:var(--f-label); font-size:11px; color:var(--on-var); margin-top:6px;}
+  textarea{width:100%; font-family:var(--f-body); font-size:14px; color:var(--on); background:var(--c-lowest);
+    border:1px solid var(--alu); border-radius:var(--r); padding:11px; outline:none; line-height:1.5;}
+  textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(27,43,72,.55);}
 </style>
 </head>
 <body>
@@ -489,6 +500,7 @@
     <button id="tab-match" onclick="showView('match')">경기</button>
     <button id="tab-stats" onclick="showView('stats')">기록</button>
     <button id="tab-fee" class="admin-only" onclick="showView('fee')">회비</button>
+    <button id="tab-suggest" onclick="showView('suggest')">건의</button>
   </div>
   <span class="spacer" id="authInfo"></span>
   <button id="adminManageBtn" class="btn sm" style="display:none;" onclick="openAdminManage()">운영진 관리</button>
@@ -646,6 +658,14 @@
   </div>
 </div>
 
+<!-- ================= SUGGESTIONS VIEW ================= -->
+<div class="view" id="view-suggest">
+  <div class="card">
+    <h2 class="sec">📮 건의사항</h2>
+    <div id="suggestBody"></div>
+  </div>
+</div>
+
 <!-- history modal -->
 <div class="overlay" id="histOverlay"><div class="modal wide" id="histBody"></div></div>
 
@@ -695,8 +715,7 @@
     <div class="ava-edit" id="avaEdit" onclick="document.getElementById('photoInput').click()"><span class="hint">사진 선택</span></div>
     <input type="file" id="photoInput" accept="image/*" style="display:none">
     <button type="button" id="avaDelBtn" class="btn ghost sm" style="display:none; margin:8px auto 0;" onclick="clearPhoto()">🗑️ 사진 삭제</button>
-    <div id="editFields">
-    <div class="rowg">
+    <div id="editNameAge" class="rowg">
       <div style="flex:2"><label class="fld">이름</label>
         <input type="text" id="mName" placeholder="선수 이름" maxlength="10"></div>
       <div style="flex:1"><label class="fld">나이</label>
@@ -706,8 +725,9 @@
       <div><label class="fld">주 포지션</label><select id="mPos"></select></div>
       <div><label class="fld">서브 포지션</label><select id="mPos2"></select></div>
     </div>
-    <label class="fld">실력 (별점)</label>
-    <div class="star-input" id="starInput"></div>
+    <div id="editSkill">
+      <label class="fld">실력 (별점)</label>
+      <div class="star-input" id="starInput"></div>
     </div>
     <div class="modal-btns">
       <button class="btn primary" style="flex:1;" onclick="saveMember()">저장</button>
@@ -1121,10 +1141,11 @@ function renderGuests(){
 function showView(v){
   document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
   document.getElementById('view-'+v).classList.add('on');
-  ['lineup','roster','match','stats','fee'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('active',v===t));
+  ['lineup','roster','match','stats','fee','suggest'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('active',v===t));
   if(v==='lineup') renderSummary();
   if(v==='match') renderMatches();
   if(v==='stats') renderStats();
+  if(v==='suggest') renderSuggest();
 }
 
 /* ============ 필터 UI ============ */
@@ -1199,7 +1220,7 @@ function renderRoster(){
       ${(isAdmin||isMine(m))?`<div class="mr-bottom">
         ${isAdmin?`${starsHtml(m.skill)}<span class="star-val">${skillNum(m.skill)}</span>`:'<span class="mr-star-lbl" style="color:var(--tertiary)">● 내 프로필</span>'}
         <span class="mr-sp"></span>
-        <button class="mr-ic" onclick="openEdit('${m.id}')" title="사진 수정">✏️ ${isAdmin?'수정':'내 사진'}</button>
+        <button class="mr-ic" onclick="openEdit('${m.id}')" title="내 정보 수정">✏️ ${isAdmin?'수정':'내 정보'}</button>
         ${isAdmin?`<button class="mr-ic" onclick="delMember('${m.id}')" title="삭제">🗑️</button>`:''}
       </div>`:''}`;
     box.appendChild(el);
@@ -1233,7 +1254,7 @@ let tempSkill=3;
 function renderStarInput(){ const el=document.getElementById('starInput');
   el.innerHTML=`<span class="stars big"><span class="fill" style="width:${tempSkill/5*100}%"></span></span><span class="star-val">${tempSkill}점</span>`; }
 function openAdd(){ if(!requireAdmin())return; editingId=null; tempPhoto=null; editMode='admin';
-  document.getElementById('memberModal').classList.remove('photo-only');
+  document.getElementById('memberModal').classList.remove('member-edit');
   document.getElementById('modalTitle').textContent='선수 추가';
   document.getElementById('mName').value=''; document.getElementById('mAge').value='';
   document.getElementById('mPos').innerHTML=posOptionsHtml('MF',false);
@@ -1244,14 +1265,14 @@ function openEdit(id){ const m=members.find(x=>x.id===id); if(!m)return;
   if(!isAdmin && !isMine(m)){ toast('본인 정보만 수정할 수 있습니다'); return; }
   editingId=id; tempPhoto=m.photo;
   const modal=document.getElementById('memberModal');
-  if(isAdmin){ editMode='admin'; modal.classList.remove('photo-only');
+  document.getElementById('mPos').innerHTML=posOptionsHtml(m.position,false);
+  document.getElementById('mPos2').innerHTML=posOptionsHtml(m.position2||'',true);
+  if(isAdmin){ editMode='admin'; modal.classList.remove('member-edit');
     document.getElementById('modalTitle').textContent='선수 수정';
     document.getElementById('mName').value=m.name; document.getElementById('mAge').value=m.age||'';
-    document.getElementById('mPos').innerHTML=posOptionsHtml(m.position,false);
-    document.getElementById('mPos2').innerHTML=posOptionsHtml(m.position2||'',true);
     tempSkill=skillNum(m.skill); renderStarInput();
-  } else { editMode='own'; modal.classList.add('photo-only');
-    document.getElementById('modalTitle').textContent='내 프로필 사진'; }
+  } else { editMode='own'; modal.classList.add('member-edit');
+    document.getElementById('modalTitle').textContent='내 정보 수정 (사진·포지션)'; }
   setAva(m.photo,m.name[0]); document.getElementById('overlay').classList.add('on'); }
 function setAva(photo,fb){ const a=document.getElementById('avaEdit');
   if(photo){a.style.backgroundImage=`url('${photo}')`;a.innerHTML='';}
@@ -1266,7 +1287,9 @@ function saveMember(){
   if(editMode==='own'){
     const m=members.find(x=>x.id===editingId);
     if(!m||!isMine(m)){ toast('본인 정보만 수정할 수 있습니다'); return; }
-    m.photo=tempPhoto||null; save(); fbUpdateField(m,{photo:m.photo}); renderRoster(); closeModal(); toast('프로필 사진을 저장했습니다 📷'); return;
+    const pos=document.getElementById('mPos').value, pos2=document.getElementById('mPos2').value;
+    m.photo=tempPhoto||null; m.position=pos; m.position2=pos2;
+    save(); fbUpdateField(m,{photo:m.photo,position:pos,position2:pos2}); renderRoster(); renderSummary(); closeModal(); toast('내 정보를 저장했습니다 ✅'); return;
   }
   if(!requireAdmin())return;
   const name=document.getElementById('mName').value.trim(); if(!name){toast('이름을 입력하세요');return;}
@@ -1909,6 +1932,42 @@ function exportStats(){
   else { const rows=[header,...data].map(r=>r.join(',')).join('\r\n'); const blob=new Blob(['﻿'+rows],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='수지FC_개인기록.csv'; a.click(); }
   toast('개인 기록을 내보냈습니다 ⬇️');
 }
+
+/* ============ 건의사항 ============ */
+function renderSuggest(){
+  const box=document.getElementById('suggestBody'); if(!box)return;
+  if(!FB){ box.innerHTML='<div class="empty">클라우드 연결이 필요합니다.</div>'; return; }
+  if(!isAdmin){
+    box.innerHTML=`<p class="muted" style="font-size:13px; margin:0 0 12px; line-height:1.6;">운영진에게 전달할 건의사항을 남겨주세요.<br>내용은 <b>운영진만</b> 확인합니다. (작성자 이름과 함께 접수)</p>
+      <textarea id="suggestText" rows="6" placeholder="건의 내용을 입력하세요..." style="width:100%; resize:vertical;"></textarea>
+      <button class="btn primary" style="width:100%; margin-top:12px; padding:13px;" onclick="submitSuggest()">접수</button>`;
+    return;
+  }
+  box.innerHTML='<p class="muted" style="font-size:12px; padding:10px 0;">불러오는 중...</p>';
+  FB.collection('suggestions').orderBy('at','desc').get().then(snap=>{
+    let html=`<div class="suggest-toolbar"><span class="count" style="color:var(--on-var)">${snap.size}건</span><span class="mr-sp" style="flex:1"></span>
+      <button class="btn ghost sm" onclick="delSelectedSuggest()">선택 삭제</button>
+      <button class="btn danger sm" onclick="delAllSuggest()">전체 삭제</button></div>`;
+    if(snap.empty){ html+='<div class="empty">접수된 건의사항이 없습니다.</div>'; box.innerHTML=html; return; }
+    snap.forEach(d=>{ const s=d.data();
+      html+=`<label class="suggest-item">
+        <input type="checkbox" class="sg-chk" value="${d.id}">
+        <div class="sg-body"><div class="sg-text">${(s.text||'').replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+          <div class="sg-meta">${s.by||'익명'} · ${fmtTime(s.at)}</div></div>
+        <button class="btn ghost sm" onclick="event.preventDefault();delSuggest('${d.id}')">🗑️</button></label>`;
+    });
+    box.innerHTML=html;
+  }).catch(e=>{ console.error(e); box.innerHTML='<div class="empty">불러오기 실패 (규칙 확인 필요)</div>'; });
+}
+function submitSuggest(){ const el=document.getElementById('suggestText'); const t=(el.value||'').trim(); if(!t){ toast('내용을 입력하세요'); return; }
+  FB.collection('suggestions').add({text:t, by:(myName||'익명'), at:Date.now()})
+    .then(()=>{ el.value=''; showPopup('접수가 완료되었습니다.\n소중한 의견 감사합니다!'); }).catch(e=>{ console.error(e); toast('접수 실패 (규칙 확인)'); }); }
+function delSuggest(id){ if(!isAdmin)return; if(!confirm('이 건의사항을 삭제할까요?'))return; FB.collection('suggestions').doc(id).delete().then(()=>renderSuggest()).catch(e=>{console.error(e);toast('삭제 실패');}); }
+function delSelectedSuggest(){ if(!isAdmin)return; const ids=[...document.querySelectorAll('.sg-chk:checked')].map(c=>c.value);
+  if(!ids.length){ toast('선택된 항목이 없습니다'); return; } if(!confirm(ids.length+'개를 삭제할까요?'))return;
+  const batch=FB.batch(); ids.forEach(id=>batch.delete(FB.collection('suggestions').doc(id))); batch.commit().then(()=>renderSuggest()).catch(e=>{console.error(e);toast('삭제 실패');}); }
+function delAllSuggest(){ if(!isAdmin)return; if(!confirm('모든 건의사항을 삭제할까요?'))return;
+  FB.collection('suggestions').get().then(snap=>{ const batch=FB.batch(); snap.forEach(d=>batch.delete(d.ref)); return batch.commit(); }).then(()=>renderSuggest()).catch(e=>{console.error(e);toast('삭제 실패');}); }
 
 /* ============ 기타 ============ */
 let toastT;
