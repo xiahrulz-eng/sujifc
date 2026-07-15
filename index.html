@@ -994,12 +994,14 @@ function openAdminManage(){
     html+='<div class="modal-sub" style="margin-top:16px">✅ 운영진</div>';
     admins.forEach(d=>{ const a=d.data(), me=(currentUser&&d.id===currentUser.uid);
       html+=`<div class="admin-row"><div style="min-width:0"><b>${a.name||a.email||'운영진'}</b>${me?' <span style="color:var(--tertiary);font-size:11px">(나)</span>':''}<div class="muted" style="font-size:11px">${a.email||''}</div></div>
-        ${me?'':`<div class="ar-btns"><button class="btn ghost sm" onclick="removeAdmin('${d.id}')">제거</button></div>`}</div>`; });
+        <div class="ar-btns"><button class="btn ghost sm" onclick="editName('admins','${d.id}','${esc(a.name)}')" title="이름 수정">✏️</button>
+        ${me?'':`<button class="btn ghost sm" onclick="removeAdmin('${d.id}')">제거</button>`}</div></div>`; });
     html+=`<div class="modal-sub" style="margin-top:16px">👤 일반회원 (${members.size}명)</div>`;
     if(members.empty) html+='<p class="muted" style="font-size:12px;margin:0 0 8px;">회원이 없습니다.</p>';
     else members.forEach(d=>{ const m=d.data();
       html+=`<div class="admin-row"><div style="min-width:0"><b>${m.name||m.email||'회원'}</b><div class="muted" style="font-size:11px">${m.email||''}</div></div>
-        <div class="ar-btns"><button class="btn ghost sm" onclick="promoteMember('${d.id}','${esc(m.name)}','${esc(m.email)}')">운영진↑</button>
+        <div class="ar-btns"><button class="btn ghost sm" onclick="editName('members','${d.id}','${esc(m.name)}')" title="이름 수정">✏️</button>
+        <button class="btn ghost sm" onclick="promoteMember('${d.id}','${esc(m.name)}','${esc(m.email)}')">운영진↑</button>
         <button class="btn ghost sm" onclick="removeMember('${d.id}')">제거</button></div></div>`; });
     html+='<div class="modal-btns"><button class="btn ghost" style="flex:1" onclick="closeAdminManage()">닫기</button></div>';
     body.innerHTML=html;
@@ -1012,6 +1014,10 @@ function approveReq(uid,name,email,type){ const coll=(type==='admin')?'admins':'
 function rejectReq(uid){ FB.collection('requests').doc(uid).delete().then(()=>{ toast('신청을 거절했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
 function removeAdmin(uid){ if(!confirm('이 운영진 권한을 제거할까요?'))return; FB.collection('admins').doc(uid).delete().then(()=>{ toast('운영진에서 제거했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
 function removeMember(uid){ if(!confirm('이 회원을 제거할까요? (앱 접근 불가)'))return; FB.collection('members').doc(uid).delete().then(()=>{ toast('회원을 제거했습니다'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
+function editName(coll,uid,curName){ if(!isAdmin)return;
+  const nn=prompt('이름 수정\n(명단의 이름과 정확히 일치해야 본인 출석·사진·기록을 편집할 수 있습니다):', curName||'');
+  if(nn===null) return; const name=nn.trim(); if(!name){ toast('이름을 입력하세요'); return; }
+  FB.collection(coll).doc(uid).update({name}).then(()=>{ toast('이름을 수정했습니다 ✏️'); openAdminManage(); }).catch(e=>{ console.error(e); toast('수정 실패'); }); }
 function promoteMember(uid,name,email){ if(!confirm('이 회원을 운영진으로 승격할까요?'))return;
   FB.collection('admins').doc(uid).set({name,email,at:Date.now()}).then(()=>FB.collection('members').doc(uid).delete()).then(()=>{ toast('운영진으로 승격했습니다 ⬆️'); openAdminManage(); }).catch(e=>{ console.error(e); toast('실패'); }); }
 /* 가입 신청 알림 (앱이 열려있거나 백그라운드 상태일 때 팝업) */
