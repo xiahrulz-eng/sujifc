@@ -91,6 +91,12 @@
   .card.collapsed .card-body{display:none;}
   .card.collapsed{padding-top:12px; padding-bottom:12px;}
   .card.collapsed .sec{margin-bottom:0;}
+  #card-maker{margin-top:16px;}
+  #card-maker>.sec.toggle{margin-bottom:14px;}
+  #card-maker.collapsed>.sec.toggle{margin-bottom:0;}
+  #card-maker.collapsed .card-body{display:none;}
+  #card-maker.collapsed .chev{transform:rotate(-90deg);}
+  #confirmedBox img{width:100%; border-radius:var(--r-lg); box-shadow:0 10px 30px rgba(0,0,0,.4); cursor:pointer;}
   label.fld{display:block; font-family:var(--f-label); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--on-var); margin:14px 0 7px;}
 
   /* controls */
@@ -509,6 +515,14 @@
 
 <!-- ================= LINEUP VIEW ================= -->
 <div class="view on" id="view-lineup">
+  <div class="card" id="confirmedCard">
+    <h2 class="sec">📌 확정 라인업 <span class="count" id="confirmedInfo"></span></h2>
+    <div id="confirmedBox"><div class="empty">🕒 현재 라인업이 준비중입니다.</div></div>
+  </div>
+
+  <div id="card-maker">
+    <h2 class="sec toggle" onclick="toggleCard('card-maker')">🛠️ 라인업 만들기 <span class="chev">▾</span></h2>
+    <div class="card-body">
   <div class="lineup-grid">
     <div>
       <div class="card collapsible" id="card-setting" style="margin-bottom:16px;">
@@ -583,12 +597,15 @@
         <span class="count" style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn sm" onclick="openHistory()">🕘 히스토리</button>
           <button class="btn sm admin-only" onclick="registerMatch()">📋 경기 등록</button>
+          <button class="btn sm admin-only" onclick="confirmLineup()">📌 라인업 확정</button>
           <button class="btn sm" onclick="saveImage()">💾 이미지 저장</button>
         </span>
       </h2>
       <div id="result">
         <div class="empty">위쪽에서 설정 후 <b>팀 생성하기</b>를 눌러주세요.</div>
       </div>
+    </div>
+  </div>
     </div>
   </div>
 </div>
@@ -885,21 +902,45 @@ function initFirebase(){
   }catch(e){ console.error('Firebase init 실패',e); FB=null; return false; }
 }
 /* 로그인 게이트 표시/숨김 + 데이터 리스너 제어 */
-let dataStarted=false, rosterUnsub=null, matchesUnsub=null, teamCfgUnsub=null;
+let dataStarted=false, rosterUnsub=null, matchesUnsub=null, teamCfgUnsub=null, lineupUnsub=null;
 function onRoleResolved(){
   const view=canView();
   document.getElementById('authGate').style.display = view?'none':'flex';
   document.getElementById('gatePending').style.display = (currentUser && role==='pending')?'':'none';
   document.getElementById('gateForm').style.display = (currentUser && role==='pending')?'none':'';
   if(!currentUser) renderAuthMode();
-  if(view){ startData(); updateAdminUI(); if(isAdmin){ maybeSeed(); requestNotifPermission(); subscribeRequests(); } else unsubRequests(); }
+  if(view){ startData(); updateAdminUI();
+    const mk=document.getElementById('card-maker'); if(mk) mk.classList.toggle('collapsed', !isAdmin);  // 회원은 라인업 만들기 접힘
+    if(isAdmin){ maybeSeed(); requestNotifPermission(); subscribeRequests(); } else unsubRequests(); }
   else { stopData(); unsubRequests(); updateAdminUI(); }
 }
-function startData(){ if(dataStarted||!FB)return; dataStarted=true; subscribeRoster(); subscribeMatches(); subscribeTeamConfig(); }
+function startData(){ if(dataStarted||!FB)return; dataStarted=true; subscribeRoster(); subscribeMatches(); subscribeTeamConfig(); subscribeLineup(); }
 function stopData(){ dataStarted=false;
   if(rosterUnsub){try{rosterUnsub();}catch(e){} rosterUnsub=null;}
   if(matchesUnsub){try{matchesUnsub();}catch(e){} matchesUnsub=null;}
-  if(teamCfgUnsub){try{teamCfgUnsub();}catch(e){} teamCfgUnsub=null;} }
+  if(teamCfgUnsub){try{teamCfgUnsub();}catch(e){} teamCfgUnsub=null;}
+  if(lineupUnsub){try{lineupUnsub();}catch(e){} lineupUnsub=null;} }
+/* 확정 라인업 (운영진이 확정 → 전 회원 공유) */
+function subscribeLineup(){ if(lineupUnsub||!FB)return; lineupUnsub=FB.collection('settings').doc('lineup').onSnapshot(doc=>{ renderConfirmed(doc.exists?doc.data():null); }, e=>console.error('lineup',e)); }
+function renderConfirmed(data){
+  const box=document.getElementById('confirmedBox'), info=document.getElementById('confirmedInfo'); if(!box)return;
+  if(data && data.image){ box.innerHTML=`<img src="${data.image}" onclick="openLightbox(this.src)">`;
+    if(info) info.textContent = data.at ? ('확정 '+fmtTime(data.at)) : ''; }
+  else { box.innerHTML='<div class="empty">🕒 현재 라인업이 준비중입니다.</div>'; if(info) info.textContent=''; }
+}
+function confirmLineup(){
+  if(!requireAdmin())return;
+  const c1=document.getElementById('cv_orange'), c2=document.getElementById('cv_green');
+  if(!lastTeams||!c1||!c2){ toast('먼저 팀을 생성하세요'); return; }
+  const gap=20, cv=document.createElement('canvas'); cv.width=CW*2+gap; cv.height=Math.max(c1.height,c2.height);
+  const ctx=cv.getContext('2d'); ctx.fillStyle='#0b1a10'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.drawImage(c1,0,0); ctx.drawImage(c2,CW+gap,0);
+  let img=cv.toDataURL('image/jpeg',0.82);
+  if(img.length>900000) img=cv.toDataURL('image/jpeg',0.6);
+  if(img.length>950000) img=cv.toDataURL('image/jpeg',0.42);
+  FB.collection('settings').doc('lineup').set({image:img, at:Date.now(), by:(myName||'운영진')})
+    .then(()=>toast('라인업을 확정·공유했습니다 📌')).catch(e=>{ console.error(e); toast('확정 실패 (이미지 용량 초과 가능)'); });
+}
 function doSignOut(){ if(FBauth) FBauth.signOut(); toast('로그아웃되었습니다'); }
 function subscribeRoster(){
   rosterUnsub=FB.collection('roster').onSnapshot(snap=>{
