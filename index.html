@@ -651,6 +651,12 @@
 <!-- admin management modal -->
 <div class="overlay" id="adminOverlay"><div class="modal wide" id="adminBody"></div></div>
 
+<!-- generic message popup -->
+<div class="overlay" id="msgOverlay" style="z-index:220;"><div class="modal" style="max-width:320px; text-align:center;">
+  <div id="msgText" style="font-size:15px; line-height:1.7; margin:6px 0 18px; white-space:pre-line;"></div>
+  <button class="btn primary" style="width:100%;" onclick="closeMsg()">확인</button>
+</div></div>
+
 <!-- password change modal -->
 <div class="overlay" id="pwOverlay" style="z-index:210;"><div class="modal">
   <h3>🔑 비밀번호 변경</h3>
@@ -922,6 +928,8 @@ function saveLoginPrefs(em,pw){
   if(sid) localStorage.setItem('suziFC_savedEmail',em); else localStorage.removeItem('suziFC_savedEmail');
   if(spw) localStorage.setItem('suziFC_savedPw',pw); else localStorage.removeItem('suziFC_savedPw');
 }
+function showPopup(text){ document.getElementById('msgText').textContent=text; document.getElementById('msgOverlay').classList.add('on'); }
+function closeMsg(){ document.getElementById('msgOverlay').classList.remove('on'); }
 function setAuthMode(m){ authMode=m; renderAuthMode(); }
 function renderAuthMode(){
   const s=(authMode!=='login');
@@ -956,8 +964,9 @@ function doLoginOrSignup(){
     const type = authMode==='signup-admin' ? 'admin' : 'member';
     FBauth.createUserWithEmailAndPassword(em,pw)
       .then(cred=>FB.collection('requests').doc(cred.user.uid).set({name,email:em,type,at:Date.now()}))
-      .then(()=>{ toast((type==='admin'?'운영진':'일반회원')+' 가입 신청 완료! 관리자 승인을 기다려주세요 📝'); setAuthMode('login'); })
-      .catch(e=>{ console.error(e); toast('가입 실패: '+authErr(e)); });
+      .then(()=>FBauth.signOut())
+      .then(()=>{ document.getElementById('loginPw').value=''; setAuthMode('login'); showPopup('신청이 완료되었습니다.\n관리자 승인 후 이용 가능합니다.'); })
+      .catch(e=>{ console.error(e); showPopup('가입 실패\n'+authErr(e)); });
   } else {
     FBauth.signInWithEmailAndPassword(em,pw).then(()=>{ saveLoginPrefs(em,pw); }).catch(e=>{ console.error(e); toast('로그인 실패: '+authErr(e)); });
   }
@@ -1890,6 +1899,7 @@ document.getElementById('editOverlay').addEventListener('click',e=>{ if(e.target
 document.getElementById('histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay')closeHistory(); });
 document.getElementById('adminOverlay').addEventListener('click',e=>{ if(e.target.id==='adminOverlay')closeAdminManage(); });
 document.getElementById('pwOverlay').addEventListener('click',e=>{ if(e.target.id==='pwOverlay')closePw(); });
+document.getElementById('msgOverlay').addEventListener('click',e=>{ if(e.target.id==='msgOverlay')closeMsg(); });
 document.getElementById('loginPw').addEventListener('keydown',e=>{ if(e.key==='Enter')doLoginOrSignup(); });
 (function(){ const cc=document.getElementById('cropCanvas');
   cc.addEventListener('pointerdown',cropDown); cc.addEventListener('pointermove',cropMove);
