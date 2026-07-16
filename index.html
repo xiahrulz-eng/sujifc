@@ -872,7 +872,7 @@ const DEFAULT_ROSTER=[
 
 let members=[], guests=[], editingId=null, tempPhoto=null, lastTeams=null;
 let matches=[], history=[], lastTeamSize=11;
-let filter={q:'',attend:'all'};
+let filter={q:'',attend:'all',includeSub:true};
 let posSet=new Set(), expandedPos=null, sortKey=null, sortDir=1;
 let hitMap={orange:[],green:[]};
 let drag=null, hoverRef=null, hoverKey=null;
@@ -1248,6 +1248,9 @@ function buildPosChips(){
   el.appendChild(chipBtn('GK', posSet.has('GK'), ()=>{ togglePos('GK'); expandedPos=null; buildPosChips(); renderRoster(); }));
   ['DF','MF','FW'].forEach(g=>{ const anySel=posSet.has(g)||POS_SUB[g].some(p=>posSet.has(p));
     el.appendChild(chipBtn(g+' ▾', expandedPos===g||anySel, ()=>{ expandedPos=(expandedPos===g?null:g); buildPosChips(); })); });
+  el.appendChild(chipBtn((filter.includeSub?'✅':'⬜')+' 서브 포함', filter.includeSub,
+    ()=>{ filter.includeSub=!filter.includeSub; buildPosChips(); renderRoster();
+      toast(filter.includeSub?'서브 포지션 포함 검색 ON':'주 포지션만 검색'); }));
   if(expandedPos){ const sub=document.createElement('div'); sub.className='sub-chips';
     sub.appendChild(chipBtn(expandedPos+' 전체', posSet.has(expandedPos), ()=>{ togglePos(expandedPos); buildPosChips(); renderRoster(); }));
     POS_SUB[expandedPos].forEach(p=>sub.appendChild(chipBtn(p, posSet.has(p), ()=>{ togglePos(p); buildPosChips(); renderRoster(); })));
@@ -1271,7 +1274,11 @@ function toggleCard(id){ document.getElementById(id).classList.toggle('collapsed
 function filtered(){
   const arr=members.filter(m=>{
     if(filter.q && !m.name.includes(filter.q)) return false;
-    if(posSet.size && !(posSet.has(m.position)||posSet.has(grp(m.position)))) return false;
+    if(posSet.size){
+      const mainHit = posSet.has(m.position)||posSet.has(grp(m.position));
+      const subHit  = filter.includeSub && m.position2 && (posSet.has(m.position2)||posSet.has(grp(m.position2)));
+      if(!mainHit && !subHit) return false;
+    }
     if(filter.attend==='yes' && !m.attend) return false;
     if(filter.attend==='no' && m.attend) return false;
     return true;
