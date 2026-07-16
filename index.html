@@ -1247,13 +1247,20 @@ function buildPosChips(){
   el.appendChild(chipBtn('전체', posSet.size===0, ()=>{ posSet.clear(); expandedPos=null; buildPosChips(); renderRoster(); }));
   el.appendChild(chipBtn('GK', posSet.has('GK'), ()=>{ togglePos('GK'); expandedPos=null; buildPosChips(); renderRoster(); }));
   ['DF','MF','FW'].forEach(g=>{ const anySel=posSet.has(g)||POS_SUB[g].some(p=>posSet.has(p));
-    el.appendChild(chipBtn(g+' ▾', expandedPos===g||anySel, ()=>{ expandedPos=(expandedPos===g?null:g); buildPosChips(); })); });
-  el.appendChild(chipBtn((filter.includeSub?'✅':'⬜')+' 서브 포함', filter.includeSub,
+    el.appendChild(chipBtn(g+(expandedPos===g?' ▴':' ▾'), expandedPos===g||anySel, ()=>{
+      if(expandedPos===g && posSet.has(g)){ posSet.delete(g); expandedPos=null; }   // 다시 누르면 접고 해제
+      else { posSet.clear(); posSet.add(g); expandedPos=g; }                          // '전체' 자동 해제 + 그룹 내 모든 포지션 표시
+      buildPosChips(); renderRoster(); })); });
+  el.appendChild(chipBtn((filter.includeSub?'✅':'⬜')+' 서브 포지션', filter.includeSub,
     ()=>{ filter.includeSub=!filter.includeSub; buildPosChips(); renderRoster();
       toast(filter.includeSub?'서브 포지션 포함 검색 ON':'주 포지션만 검색'); }));
-  if(expandedPos){ const sub=document.createElement('div'); sub.className='sub-chips';
-    sub.appendChild(chipBtn(expandedPos+' 전체', posSet.has(expandedPos), ()=>{ togglePos(expandedPos); buildPosChips(); renderRoster(); }));
-    POS_SUB[expandedPos].forEach(p=>sub.appendChild(chipBtn(p, posSet.has(p), ()=>{ togglePos(p); buildPosChips(); renderRoster(); })));
+  if(expandedPos){ const g=expandedPos, sub=document.createElement('div'); sub.className='sub-chips';
+    sub.appendChild(chipBtn(g+' 전체', posSet.has(g), ()=>{ POS_SUB[g].forEach(x=>posSet.delete(x)); posSet.add(g); buildPosChips(); renderRoster(); }));
+    POS_SUB[g].forEach(p=>sub.appendChild(chipBtn(p, posSet.has(p), ()=>{
+      if(posSet.has(g)) posSet.delete(g);        // 그룹 전체 → 선택한 세부 포지션만 표시
+      togglePos(p);
+      if(posSet.size===0) posSet.add(g);         // 마지막 세부 해제 시 그룹 전체로 복귀
+      buildPosChips(); renderRoster(); })));
     el.appendChild(sub);
   }
 }
