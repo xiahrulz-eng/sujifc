@@ -1190,7 +1190,13 @@ function applyCrop(){ if(!cropImg){ closeCrop(); return; } const OUT=512, k=OUT/
   tempPhoto=canvasToDataURL(oc); setAva(tempPhoto,''); closeCrop(); }
 
 /* ============ 저장/생성 ============ */
-function save(){ localStorage.setItem('suziFC_members',JSON.stringify(members)); }
+/* localStorage 저장은 절대 예외를 던지지 않게 (용량 초과 시 앱 동작이 멈추지 않도록).
+   초과하면 light()로 축소본 저장, 그래도 실패하면 로컬 캐시는 포기(클라우드가 원본). */
+function lsSet(key,obj,light){ try{ localStorage.setItem(key,JSON.stringify(obj)); return true; }
+  catch(e){ if(light){ try{ localStorage.setItem(key,JSON.stringify(light())); return true; }catch(_){}}
+    try{ localStorage.removeItem(key); }catch(_){}
+    return false; } }
+function save(){ lsSet('suziFC_members', members, ()=>members.map(m=>({...m, photo:null}))); }
 function load(){ const r=localStorage.getItem('suziFC_members'); if(r){try{members=JSON.parse(r);}catch(e){members=[];}} if(!members.length) seed();
   members.forEach(m=>{ if(!m.stats) m.stats={...EMPTY_STATS}; m.skill=skillNum(m.skill); if(m.position2===undefined)m.position2=''; }); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
@@ -1198,7 +1204,7 @@ function cloneDefault(){ return DEFAULT_ROSTER.map(r=>({id:uid(),name:r[0],age:r
 function seed(){ members=cloneDefault(); save(); }
 
 /* ============ 게스트 ============ */
-function saveGuests(){ localStorage.setItem('suziFC_guests',JSON.stringify(guests)); }
+function saveGuests(){ lsSet('suziFC_guests', guests); }
 function loadGuests(){ const r=localStorage.getItem('suziFC_guests'); if(r){try{guests=JSON.parse(r);}catch(e){guests=[];}} }
 function renumberGuests(){ guests.forEach((g,i)=>g.name='게스트'+(i+1)); }
 function addGuests(){
@@ -1848,7 +1854,7 @@ function snapSlots(t){ const out=[], rows=t.rows;
   else ['GK','DF','MF','FW'].forEach(pos=>(rows[pos]||[]).forEach(p=>out.push({p,label:pos,cat:pos})));
   return out;
 }
-function saveHistory(){ localStorage.setItem('suziFC_history',JSON.stringify(history)); }
+function saveHistory(){ lsSet('suziFC_history', history, ()=>history.slice(0,4)); }
 function loadHistory(){ const r=localStorage.getItem('suziFC_history'); if(r){try{history=JSON.parse(r);}catch(e){history=[];}} }
 function pushHistory(){ history.unshift(snapshotTeams()); history=history.slice(0,12); saveHistory(); }
 function fmtTime(ts){ const d=new Date(ts); const p=n=>('0'+n).slice(-2);
@@ -1875,7 +1881,7 @@ function loadHistoryItem(i){ const s=history[i]; if(!s)return; lastTeamSize=s.te
 function delHistoryItem(i){ history.splice(i,1); saveHistory(); openHistory(); }
 
 /* ============ 경기 등록 / 결과 ============ */
-function saveMatches(){ localStorage.setItem('suziFC_matches',JSON.stringify(matches)); }
+function saveMatches(){ lsSet('suziFC_matches', matches, ()=>matches.slice(0,10)); }
 function loadMatches(){ const r=localStorage.getItem('suziFC_matches'); if(r){try{matches=JSON.parse(r);}catch(e){matches=[];}} }
 function todayStr(){ const d=new Date(),p=n=>('0'+n).slice(-2); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function registerMatch(){
