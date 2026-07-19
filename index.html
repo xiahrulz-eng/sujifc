@@ -337,6 +337,7 @@
   .guest-chip .gx:hover{color:var(--lime-bright);}
   /* 운영진 전용 요소는 로그인 전 숨김 */
   body:not(.admin) .admin-only{display:none !important;}
+  body:not(.master) .master-only{display:none !important;}
   #authBtn{border:1px solid rgba(168,178,193,.4);}
   body.admin #authInfo{color:var(--tertiary); font-family:var(--f-label); font-size:11px; letter-spacing:.05em;}
   .ro-note{font-family:var(--f-label); font-size:11px; letter-spacing:.04em; color:var(--on-var);
@@ -907,7 +908,15 @@ function saveTeamCfg(){ if(!requireAdmin())return;
 function requireAdmin(){ if(canEdit()) return true; toast('운영진 로그인이 필요합니다 🔒'); return false; }
 function memberDoc(m,i){ return {name:m.name,age:(m.age??null),position:m.position,position2:m.position2||'',skill:skillNum(m.skill),photo:m.photo||null,stats:m.stats||{...EMPTY_STATS},attend:(m.attend!==false),order:(m.order!==undefined?m.order:(i||0))}; }
 function fbUpdateField(m,obj){ if(!FB||!m||!(isAdmin||isMine(m)))return; FB.collection('roster').doc(m.id).update(obj).catch(e=>console.error(e)); }
-function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:mt.snap,orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||'',momId:mt.momId||'',momName:mt.momName||'',goalsO:(mt.goalsO||[]),goalsG:(mt.goalsG||[])}; }
+/* Firestore는 '배열 안의 배열'을 저장할 수 없음 → 라인업 rows( [[..],[..]] )를 map 배열로 감싸 저장/복원.
+   (감싸지 않으면 set()이 조용히 실패해서 등록한 사람에게만 보이고 남들에겐 공유되지 않음) */
+function serializeSnap(s){ if(!s) return s; const o={...s};
+  ['orange','green'].forEach(k=>{ if(o[k]&&Array.isArray(o[k].rows)) o[k]={...o[k], rows:o[k].rows.map(row=>({c:row}))}; });
+  return o; }
+function deserializeSnap(s){ if(!s) return s; const o={...s};
+  ['orange','green'].forEach(k=>{ if(o[k]&&Array.isArray(o[k].rows)) o[k]={...o[k], rows:o[k].rows.map(r=>Array.isArray(r)?r:((r&&r.c)||[]))}; });
+  return o; }
+function matchDoc(mt){ return {at:mt.at,date:mt.date,snap:serializeSnap(mt.snap),orangeScore:(mt.orangeScore??''),greenScore:(mt.greenScore??''),memo:mt.memo||'',momId:mt.momId||'',momName:mt.momName||'',goalsO:(mt.goalsO||[]),goalsG:(mt.goalsG||[])}; }
 function initFirebase(){
   if(!window.firebase || !window.SUJI_FIREBASE_CONFIG){ document.getElementById('gateBody').innerHTML='<p class="gate-msg">앱을 불러오지 못했습니다.<br>인터넷 연결 후 새로고침 해주세요.</p>'; return false; }
   try{
@@ -962,7 +971,7 @@ function renderConfirmed(data){
   else { confirmedImage=null; box.innerHTML='<div class="empty">🕒 현재 라인업이 준비중입니다.</div>'; if(info) info.textContent=''; }
 }
 function downloadConfirmed(){ if(!confirmedImage){ toast('저장할 라인업이 없습니다'); return; }
-  const a=document.createElement('a'); a.download='수지FC_확정라인업.jpg'; a.href=confirmedImage; a.click(); }
+  saveDataUrl(confirmedImage,'수지FC_확정라인업.jpg'); }
 function cancelLineup(){ if(!requireAdmin())return; if(!confirm('확정 라인업을 취소할까요?\n(회원 화면이 "준비중"으로 바뀝니다)'))return;
   FB.collection('settings').doc('lineup').delete().then(()=>toast('확정을 취소했습니다')).catch(e=>{ console.error(e); toast('취소 실패'); }); }
 function confirmLineup(){
@@ -993,7 +1002,7 @@ function subscribeRoster(){
 function subscribeMatches(){
   matchesUnsub=FB.collection('matches').onSnapshot(snap=>{
     const arr=[];
-    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,at:d.at||0,date:d.date||'',snap:d.snap,orangeScore:(d.orangeScore??''),greenScore:(d.greenScore??''),memo:d.memo||'',momId:d.momId||'',momName:d.momName||'',goalsO:(d.goalsO||[]),goalsG:(d.goalsG||[])}); });
+    snap.forEach(doc=>{ const d=doc.data(); arr.push({id:doc.id,at:d.at||0,date:d.date||'',snap:deserializeSnap(d.snap),orangeScore:(d.orangeScore??''),greenScore:(d.greenScore??''),memo:d.memo||'',momId:d.momId||'',momName:d.momName||'',goalsO:(d.goalsO||[]),goalsG:(d.goalsG||[])}); });
     arr.sort((a,b)=>b.at-a.at);
     matches=arr; saveMatches();
     if(document.getElementById('view-match').classList.contains('on')) renderMatches();
@@ -1007,6 +1016,7 @@ function fbSaveMatch(mt){ if(!FB||!isAdmin||!mt) return; FB.collection('matches'
 function fbDeleteMatch(id){ if(!FB||!isAdmin) return; FB.collection('matches').doc(id).delete().catch(e=>console.error(e)); }
 function updateAdminUI(){
   document.body.classList.toggle('admin',isAdmin);
+  document.body.classList.toggle('master',isMaster);   // 팀 평균 별점 등 마스터 전용 표시
   const btn=document.getElementById('authBtn'), info=document.getElementById('authInfo'), mng=document.getElementById('adminManageBtn');
   if(currentUser && canView()){
     btn.style.display=''; btn.textContent='로그아웃';
@@ -1676,7 +1686,7 @@ function renderResult(){
     const cv=document.createElement('canvas'); cv.id='cv_'+k; cv._teamKey=k; cv.style.touchAction='none';
     cv.addEventListener('pointerdown',e=>{ const r=refFromCanvasXY(cv,e.clientX,e.clientY); if(r){ e.preventDefault(); startDrag(e,r); } });
     wrap.appendChild(cv);
-    const avg=document.createElement('div'); avg.className='team-avg admin-only'; avg.innerHTML=teamAvgHtml(lastTeams[k]); wrap.appendChild(avg);
+    const avg=document.createElement('div'); avg.className='team-avg master-only'; avg.innerHTML=teamAvgHtml(lastTeams[k]); wrap.appendChild(avg);
     tb.appendChild(wrap);
     // 후보
     const bench=lastTeams[k].bench||[];
@@ -1816,7 +1826,24 @@ function excludeFromLineup(){
 }
 
 /* ============ 저장 ============ */
-function download(canvas,name){ const a=document.createElement('a'); a.download=name; a.href=canvas.toDataURL('image/jpeg',.95); a.click(); }
+const isMobile=/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// 모바일: 공유시트(사진 저장/카톡 전송) 우선, 실패·불가 시 다운로드로 폴백
+function shareOrDownload(blob,name){
+  const dl=()=>{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.download=name; a.href=url;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000); };
+  try{ const file=new File([blob],name,{type:blob.type||'image/jpeg'});
+    if(isMobile && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:'수지FC'}).catch(err=>{ if(err&&err.name!=='AbortError') dl(); }); return; }
+  }catch(_){}
+  dl();
+}
+function download(canvas,name){
+  try{ canvas.toBlob(b=>{ if(b) shareOrDownload(b,name); else toast('이미지 생성 실패'); },'image/jpeg',0.95); }
+  catch(e){ console.error(e); toast('이미지 저장 실패'); }
+}
+function saveDataUrl(dataUrl,name){ if(!dataUrl){ toast('저장할 이미지가 없습니다'); return; }
+  fetch(dataUrl).then(r=>r.blob()).then(b=>shareOrDownload(b,name))
+    .catch(()=>{ const a=document.createElement('a'); a.download=name; a.href=dataUrl; a.click(); }); }
 function saveOne(k){ if(!lastTeams){toast('먼저 팀을 생성하세요');return;} download(document.getElementById('cv_'+k),`수지FC_${lastTeams[k].name}.jpg`); }
 function saveImage(){ if(!lastTeams){toast('먼저 팀을 생성하세요');return;}
   const c1=document.getElementById('cv_orange'),c2=document.getElementById('cv_green');
@@ -2006,7 +2033,7 @@ function lbApply(){ const img=document.getElementById('lightboxImg'); img.style.
 function openLightbox(src){ lbScale=1; lbX=0; lbY=0; const img=document.getElementById('lightboxImg'); img.src=src; lbApply(); document.getElementById('lightbox').classList.add('on'); }
 function closeLightbox(){ document.getElementById('lightbox').classList.remove('on'); }
 function downloadLightbox(){ const src=document.getElementById('lightboxImg').src; if(!src){toast('이미지가 없습니다');return;}
-  const a=document.createElement('a'); a.download='수지FC_이미지.jpg'; a.href=src; a.click(); }
+  saveDataUrl(src,'수지FC_이미지.jpg'); }
 function viewMemberPhoto(id){ const m=members.find(x=>x.id===id); if(!m)return; openLightbox(m.photo||DEFAULT_PROFILE_SRC); }
 function updMatch(id,field,val){ if(!requireAdmin())return; const m=matches.find(x=>x.id===id); if(!m)return; m[field]=val;
   if(field==='orangeScore'||field==='greenScore'){ const key=field==='orangeScore'?'goalsO':'goalsG'; const n=Math.max(0,parseInt(val)||0);
